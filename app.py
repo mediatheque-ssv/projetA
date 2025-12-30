@@ -6,7 +6,7 @@ st.title("Répartition bénévoles enfants")
 # Importer le CSV
 uploaded_file = st.file_uploader("Importer le CSV des disponibilités", type=["csv"])
 if uploaded_file:
-    df = pd.read_csv(uploaded_file)
+    df = pd.read_csv(uploaded_file, encoding='utf-8')
     st.subheader("Aperçu des données importées")
     st.dataframe(df)
 
@@ -29,3 +29,4 @@ if uploaded_file:
     # Affichage
     for c, enfants in repartition.items():
         st.write(f"**{c}**: {', '.join(enfants)}")
+
