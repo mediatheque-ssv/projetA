@@ -25,11 +25,13 @@ except Exception as e:
     st.error(f"Erreur de lecture du CSV : {e}")
     st.stop()
 
+# Nettoyage colonnes
 df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
 
+# Vérification colonnes
 if "Date" not in df.columns or "Noms_dispos" not in df.columns:
     st.error(
-        "Le CSV doit contenir EXACTEMENT les colonnes : Date ; Noms_dispos\n\n"
+        "Le CSV doit contenir EXACTEMENT les colonnes : Date ; Noms_dispos\n"
         f"Colonnes détectées : {df.columns.tolist()}"
     )
     st.stop()
@@ -50,17 +52,15 @@ max_par_date = st.slider(
 # =====================================================
 # 3️⃣ EXTRACTION DES NOMS
 # =====================================================
-noms_uniques = sorted(
-    {
-        n.strip()
-        for cell in df["Noms_dispos"]
-        for n in str(cell).split(";")
-        if n.strip()
-    }
-)
+noms_uniques = sorted({
+    n.strip()
+    for cell in df["Noms_dispos"]
+    for n in str(cell).split(";")
+    if n.strip()
+})
 
 st.subheader("Enfants détectés")
-st.write(noms_uniques)
+st.write(noms_uniques if noms_uniques else "Aucun enfant détecté !")
 
 # =====================================================
 # 4️⃣ BINÔMES (INTERFACE)
@@ -70,21 +70,20 @@ st.subheader("Binômes à ne pas séparer")
 if "binomes" not in st.session_state:
     st.session_state.binomes = []
 
-col1, col2 = st.columns(2)
+if noms_uniques:
+    col1, col2 = st.columns(2)
+    with col1:
+        enfant_a = st.selectbox("Enfant A", noms_uniques, key="a")
+    with col2:
+        enfant_b = st.selectbox("Enfant B", noms_uniques, key="b")
 
-with col1:
-    enfant_a = st.selectbox("Enfant A", noms_uniques, key="a")
-
-with col2:
-    enfant_b = st.selectbox("Enfant B", noms_uniques, key="b")
-
-if (
-    enfant_a != enfant_b
-    and st.button("Ajouter le binôme")
-    and (enfant_a, enfant_b) not in st.session_state.binomes
-    and (enfant_b, enfant_a) not in st.session_state.binomes
-):
-    st.session_state.binomes.append((enfant_a, enfant_b))
+    if (
+        enfant_a != enfant_b
+        and st.button("Ajouter le binôme")
+        and (enfant_a, enfant_b) not in st.session_state.binomes
+        and (enfant_b, enfant_a) not in st.session_state.binomes
+    ):
+        st.session_state.binomes.append((enfant_a, enfant_b))
 
 if st.session_state.binomes:
     st.write("Binômes définis :")
@@ -94,20 +93,20 @@ if st.session_state.binomes:
 binomes = st.session_state.binomes
 
 # =====================================================
-# 5️⃣ OCCURRENCES MENSUELLES
+# 5️⃣ OCCURRENCES MAXIMALES PAR ENFANT
 # =====================================================
 st.subheader("Nombre maximal d'occurrences par enfant")
 
 max_occurrences = {}
-
-for nom in noms_uniques:
-    max_occurrences[nom] = st.number_input(
-        nom,
-        min_value=0,
-        max_value=10,
-        value=1,
-        key=f"occ_{nom}"
-    )
+if noms_uniques:
+    for nom in noms_uniques:
+        max_occurrences[nom] = st.number_input(
+            nom,
+            min_value=0,
+            max_value=10,
+            value=1,
+            key=f"occ_{nom}"
+        )
 
 # =====================================================
 # 6️⃣ RÉPARTITION
@@ -129,8 +128,8 @@ for _, row in df.iterrows():
     for a, b in binomes:
         if (
             a in dispos and b in dispos
-            and compteur[a] < max_occurrences[a]
-            and compteur[b] < max_occurrences[b]
+            and compteur.get(a, 0) < max_occurrences.get(a, 1)
+            and compteur.get(b, 0) < max_occurrences.get(b, 1)
             and len(repartition[date]) <= max_par_date - 2
         ):
             repartition[date].extend([a, b])
@@ -142,7 +141,7 @@ for _, row in df.iterrows():
     for nom in dispos:
         if (
             nom not in deja_affectes_par_date[date]
-            and compteur[nom] < max_occurrences[nom]
+            and compteur.get(nom, 0) < max_occurrences.get(nom, 1)
             and len(repartition[date]) < max_par_date
         ):
             repartition[date].append(nom)
