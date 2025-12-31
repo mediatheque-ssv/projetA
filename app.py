@@ -25,7 +25,7 @@ if uploaded_file:
     st.write(df.columns.tolist())
 
     # Colonnes attendues
-    colonnes_attendues = ["date", "noms_dispos"]
+    colonnes_attendues = ["Date", "Noms_dispos"]
 
     if not all(c in df.columns for c in colonnes_attendues):
         st.error(
@@ -115,3 +115,4 @@ if uploaded_file:
         file_name="repartition.csv",
         mime="text/csv"
     )
+
