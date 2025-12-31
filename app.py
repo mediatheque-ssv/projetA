@@ -11,37 +11,25 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file:
     # -----------------------------
-    # Lecture du CSV avec Excel FR
+    # Lecture CSV robuste
     # -----------------------------
     try:
         df = pd.read_csv(uploaded_file, encoding="utf-8-sig", sep=";")
     except UnicodeDecodeError:
         df = pd.read_csv(uploaded_file, encoding="latin1", sep=";")
 
-    # 🔹 Normalisation forte des colonnes
-    df.columns = (
-        df.columns
-        .str.replace("\ufeff", "", regex=False)  # enlève BOM
-        .str.strip()
-        .str.lower()
-    )
+    # Normalisation des colonnes
+    df.columns = df.columns.str.replace("\ufeff", "", regex=False).str.strip()
+    
+    # Debug : colonnes détectées
+    st.write("Colonnes après nettoyage :", df.columns.tolist())
 
-    # 🔹 Mapping tolérant pour les noms de colonnes
-    mapping_colonnes = {
-        "date": "date",
-        "jour": "date",
-        "noms_dispos": "noms_dispos",
-        "noms dispos": "noms_dispos",
-        "dispos": "noms_dispos",
-    }
-
-    df = df.rename(columns={col: mapping_colonnes.get(col, col) for col in df.columns})
-
-    # Vérification finale des colonnes
-    if not {"date", "noms_dispos"}.issubset(df.columns):
+    # Vérification des colonnes attendues
+    if not {"Date", "Noms_dispos"}.issubset(df.columns):
         st.error(
             f"Colonnes détectées : {df.columns.tolist()}\n"
-            "Colonnes attendues : date, noms_dispos"
+            "Colonnes attendues : Date, Noms_dispos\n\n"
+            "Assurez-vous que le séparateur est ';' et que les listes dans 'Noms_dispos' sont entre guillemets."
         )
         st.stop()
 
@@ -66,8 +54,8 @@ if uploaded_file:
     non_affectes = set()
 
     for _, row in df.iterrows():
-        date = str(row["date"]).strip()
-        noms_cellule = str(row["noms_dispos"])
+        date = str(row["Date"]).strip()
+        noms_cellule = str(row["Noms_dispos"])
 
         repartition[date] = []
 
