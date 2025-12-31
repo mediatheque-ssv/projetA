@@ -14,9 +14,9 @@ uploaded_file = st.file_uploader(
 if not uploaded_file:
     st.stop()
 
-# Lecture CSV robuste avec encodage Latin1 (Excel FR)
+# Lecture CSV robuste avec détection automatique du séparateur
 try:
-    df = pd.read_csv(uploaded_file, sep=";", encoding="latin1", engine="python")
+    df = pd.read_csv(uploaded_file, sep=None, engine="python", encoding="latin1")
 except Exception as e:
     st.error(f"Impossible de lire le CSV : {e}")
     st.stop()
