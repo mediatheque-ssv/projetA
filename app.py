@@ -14,16 +14,15 @@ uploaded_file = st.file_uploader(
 if not uploaded_file:
     st.stop()
 
-# Lecture CSV avec gestion automatique des accents
-encodages_possibles = ["utf-8-sig", "utf-8", "latin1"]
-for enc in encodages_possibles:
+# Lecture CSV robuste (UTF-8 ou Latin1)
+try:
     try:
-        df = pd.read_csv(uploaded_file, sep=";", encoding=enc, engine="python")
-        break
-    except Exception as e:
-        dernier_erreur = e
-else:
-    st.error(f"Impossible de lire le CSV avec les encodages courants : {dernier_erreur}")
+        df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
+    except UnicodeDecodeError:
+        uploaded_file.seek(0)
+        df = pd.read_csv(uploaded_file, sep=";", encoding="latin1", engine="python")
+except Exception as e:
+    st.error(f"Impossible de lire le CSV : {e}")
     st.stop()
 
 # Nettoyage colonnes
@@ -105,7 +104,7 @@ for nom in noms_uniques:
 st.subheader("Répartition finale")
 repartition = {}
 compteur = {nom: 0 for nom in noms_uniques}
-deja_affectes_par_date = {}  # Pour que chaque enfant apparaisse max 1 fois par jour
+deja_affectes_par_date = {}
 
 for _, row in df.iterrows():
     date = str(row["Date"]).strip()
@@ -171,7 +170,7 @@ export_df = pd.DataFrame([
     for creneau, enfants in repartition.items()
 ])
 
-csv = export_df.to_csv(index=False, sep=";").encode("utf-8-sig")
+csv = export_df.to_csv(index=False, sep=";", encoding="utf-8-sig")
 st.download_button(
     "Télécharger la répartition CSV",
     data=csv,
