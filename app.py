@@ -15,12 +15,7 @@ if not uploaded_file:
     st.stop()
 
 try:
-    df = pd.read_csv(
-        uploaded_file,
-        sep=";",
-        encoding="utf-8-sig",
-        engine="python"
-    )
+    df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
 except Exception as e:
     st.error(f"Erreur de lecture du CSV : {e}")
     st.stop()
@@ -43,11 +38,7 @@ st.dataframe(df)
 # 2️⃣ PARAMÈTRES GÉNÉRAUX
 # =====================================================
 st.subheader("Paramètres généraux")
-
-max_par_date = st.slider(
-    "Nombre maximum d'enfants par créneau",
-    1, 10, 3
-)
+max_par_date = st.slider("Nombre maximum d'enfants par créneau", 1, 10, 3)
 
 # =====================================================
 # 3️⃣ EXTRACTION DES NOMS
@@ -60,13 +51,15 @@ noms_uniques = sorted({
 })
 
 st.subheader("Enfants détectés")
-st.write(noms_uniques if noms_uniques else "Aucun enfant détecté !")
+if noms_uniques:
+    st.write(noms_uniques)
+else:
+    st.warning("Aucun enfant détecté ! Vérifie le CSV et le séparateur ';'")
 
 # =====================================================
 # 4️⃣ BINÔMES (INTERFACE)
 # =====================================================
 st.subheader("Binômes à ne pas séparer")
-
 if "binomes" not in st.session_state:
     st.session_state.binomes = []
 
@@ -96,23 +89,17 @@ binomes = st.session_state.binomes
 # 5️⃣ OCCURRENCES MAXIMALES PAR ENFANT
 # =====================================================
 st.subheader("Nombre maximal d'occurrences par enfant")
-
 max_occurrences = {}
 if noms_uniques:
     for nom in noms_uniques:
         max_occurrences[nom] = st.number_input(
-            nom,
-            min_value=0,
-            max_value=10,
-            value=1,
-            key=f"occ_{nom}"
+            nom, min_value=0, max_value=10, value=1, key=f"occ_{nom}"
         )
 
 # =====================================================
 # 6️⃣ RÉPARTITION
 # =====================================================
 st.subheader("Répartition finale")
-
 repartition = {}
 compteur = {nom: 0 for nom in noms_uniques}
 deja_affectes_par_date = {}
@@ -158,6 +145,12 @@ for date, enfants in repartition.items():
         f"({max_par_date - len(enfants)} place(s) restante(s))"
     )
 
+# Enfants non affectés
+non_affectes = [nom for nom, c in compteur.items() if c < max_occurrences.get(nom, 1)]
+if non_affectes:
+    st.subheader("Enfants non affectés")
+    st.write(", ".join(non_affectes))
+
 # =====================================================
 # 8️⃣ EXPORT CSV
 # =====================================================
@@ -171,7 +164,6 @@ export_df = pd.DataFrame([
 ])
 
 csv = export_df.to_csv(index=False, sep=";").encode("utf-8")
-
 st.download_button(
     "Télécharger la répartition CSV",
     data=csv,
