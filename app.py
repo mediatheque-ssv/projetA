@@ -14,13 +14,9 @@ uploaded_file = st.file_uploader(
 if not uploaded_file:
     st.stop()
 
-# Lecture CSV robuste (UTF-8 ou Latin1)
+# Lecture CSV robuste avec encodage Latin1 (Excel FR)
 try:
-    try:
-        df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
-    except UnicodeDecodeError:
-        uploaded_file.seek(0)
-        df = pd.read_csv(uploaded_file, sep=";", encoding="latin1", engine="python")
+    df = pd.read_csv(uploaded_file, sep=";", encoding="latin1", engine="python")
 except Exception as e:
     st.error(f"Impossible de lire le CSV : {e}")
     st.stop()
@@ -170,7 +166,7 @@ export_df = pd.DataFrame([
     for creneau, enfants in repartition.items()
 ])
 
-csv = export_df.to_csv(index=False, sep=";", encoding="utf-8-sig")
+csv = export_df.to_csv(index=False, sep=";", encoding="latin1")
 st.download_button(
     "Télécharger la répartition CSV",
     data=csv,
