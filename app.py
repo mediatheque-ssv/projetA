@@ -14,10 +14,16 @@ uploaded_file = st.file_uploader(
 if not uploaded_file:
     st.stop()
 
-try:
-    df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
-except Exception as e:
-    st.error(f"Erreur de lecture du CSV : {e}")
+# Lecture CSV avec gestion automatique des accents
+encodages_possibles = ["utf-8-sig", "utf-8", "latin1"]
+for enc in encodages_possibles:
+    try:
+        df = pd.read_csv(uploaded_file, sep=";", encoding=enc, engine="python")
+        break
+    except Exception as e:
+        dernier_erreur = e
+else:
+    st.error(f"Impossible de lire le CSV avec les encodages courants : {dernier_erreur}")
     st.stop()
 
 # Nettoyage colonnes
@@ -165,7 +171,7 @@ export_df = pd.DataFrame([
     for creneau, enfants in repartition.items()
 ])
 
-csv = export_df.to_csv(index=False, sep=";").encode("utf-8")
+csv = export_df.to_csv(index=False, sep=";").encode("utf-8-sig")
 st.download_button(
     "Télécharger la répartition CSV",
     data=csv,
