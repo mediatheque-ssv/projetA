@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
 
-st.title("Répartition bénévoles / enfants")
+st.title("Répartition bénévoles / enfants par date")
 
-# Upload du fichier CSV
+# Upload du CSV
 uploaded_file = st.file_uploader(
-    "Importer le CSV des disponibilités",
+    "Importer le CSV (Date / Noms_dispos)",
     type=["csv"]
 )
 
@@ -19,63 +19,60 @@ if uploaded_file:
     st.subheader("Aperçu des données importées")
     st.dataframe(df)
 
-    # Curseur pour la capacité max par créneau
-    max_par_creneau = st.slider(
-        "Nombre maximum d'enfants par créneau",
+    # Vérification minimale
+    if not {"Date", "Noms_dispos"}.issubset(df.columns):
+        st.error("Le CSV doit contenir les colonnes 'Date' et 'Noms_dispos'")
+        st.stop()
+
+    # Capacité max par date
+    max_par_date = st.slider(
+        "Nombre maximum d'enfants par date",
         min_value=1,
         max_value=10,
         value=3
     )
 
     # -----------------------------
-    # Extraction des créneaux depuis le CSV
+    # Répartition
     # -----------------------------
-    creneaux = []
-    for dispo in df["Dispo"].dropna():
-        for c in str(dispo).split(";"):
-            c = c.strip()
-            if c and c not in creneaux:
-                creneaux.append(c)
-
-    # Initialisation de la répartition
-    repartition = {c: [] for c in creneaux}
-
-    # -----------------------------
-    # Répartition des enfants
-    # -----------------------------
-    non_affectes = []
+    repartition = {}
+    deja_affectes = set()
+    non_affectes = set()
 
     for _, row in df.iterrows():
-        nom = row["Nom"]
-        dispos = str(row["Dispo"]).split(";")
-        affecte = False
+        date = str(row["Date"]).strip()
+        noms = str(row["Noms_dispos"]).split(";")
 
-        for c in dispos:
-            c = c.strip()
-            if c in repartition and len(repartition[c]) < max_par_creneau:
-                repartition[c].append(nom)
-                affecte = True
-                break
+        repartition[date] = []
 
-        if not affecte:
-            non_affectes.append(nom)
+        for nom in noms:
+            nom = nom.strip()
+            if not nom:
+                continue
+
+            if nom not in deja_affectes and len(repartition[date]) < max_par_date:
+                repartition[date].append(nom)
+                deja_affectes.add(nom)
+            else:
+                non_affectes.add(nom)
 
     # -----------------------------
-    # Affichage des résultats
+    # Affichage
     # -----------------------------
     st.subheader("Répartition finale")
 
-    for c, enfants in repartition.items():
-        places_restantes = max_par_creneau - len(enfants)
+    for date, enfants in repartition.items():
+        places_restantes = max_par_date - len(enfants)
         st.write(
-            f"**{c}** : "
+            f"**{date}** : "
             f"{', '.join(enfants) if enfants else 'Aucun enfant'} "
             f"(_{places_restantes} place(s) restante(s)_)"
         )
 
     if non_affectes:
         st.warning(
-            "Non affectés : " + ", ".join(non_affectes)
+            "Non affectés (déjà pris ou manque de place) : "
+            + ", ".join(sorted(non_affectes))
         )
 
     # -----------------------------
@@ -84,11 +81,11 @@ if uploaded_file:
     export_df = pd.DataFrame(
         [
             {
-                "Date": c,
-                "Enfants": ", ".join(enfants),
-                "Places restantes": max_par_creneau - len(enfants),
+                "Date": date,
+                "Enfants_affectés": ", ".join(enfants),
+                "Places_restantes": max_par_date - len(enfants),
             }
-            for c, enfants in repartition.items()
+            for date, enfants in repartition.items()
         ]
     )
 
