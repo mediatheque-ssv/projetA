@@ -15,6 +15,7 @@ if not uploaded_file:
     st.stop()
 
 # Lecture CSV robuste avec détection automatique du séparateur
+uploaded_file.seek(0)  # Repositionne le curseur
 try:
     df = pd.read_csv(uploaded_file, sep=None, engine="python", encoding="latin1")
 except Exception as e:
