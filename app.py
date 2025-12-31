@@ -9,58 +9,68 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file:
-    # -----------------------------
-    # Lecture CSV ultra robuste
-    # -----------------------------
+    # =============================
+    # LECTURE CSV (FORCÉE ET FIABLE)
+    # =============================
     try:
         df = pd.read_csv(
             uploaded_file,
+            sep=";",                 # ← OBLIGATOIRE
             encoding="utf-8-sig",
-            sep=None,          # ← détection automatique
             engine="python"
         )
-    except Exception:
-        df = pd.read_csv(
-            uploaded_file,
-            encoding="latin1",
-            sep=";"
-        )
+    except Exception as e:
+        st.error(f"Erreur de lecture du CSV : {e}")
+        st.stop()
 
-    # Nettoyage des noms de colonnes
-    df.columns = [c.replace("\ufeff", "").strip().lower() for c in df.columns]
-
-    st.subheader("Colonnes détectées")
+    # =============================
+    # DEBUG VISUEL (IMPORTANT)
+    # =============================
+    st.subheader("Colonnes détectées par Pandas (brutes)")
     st.write(df.columns.tolist())
 
-    # Vérification des colonnes
-    if "date" not in df.columns or "noms_dispos" not in df.columns:
+    # Nettoyage des noms de colonnes
+    df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
+
+    st.subheader("Colonnes après nettoyage")
+    st.write(df.columns.tolist())
+
+    # =============================
+    # VÉRIFICATION STRICTE
+    # =============================
+    if "Date" not in df.columns or "Noms_dispos" not in df.columns:
         st.error(
-            "Le CSV doit contenir les colonnes 'Date' et 'Noms_dispos'.\n\n"
+            "Le CSV doit contenir EXACTEMENT les colonnes :\n"
+            "- Date\n"
+            "- Noms_dispos\n\n"
             f"Colonnes détectées : {df.columns.tolist()}"
         )
         st.stop()
 
+    # =============================
+    # APERÇU
+    # =============================
     st.subheader("Aperçu des données importées")
     st.dataframe(df)
 
-    # -----------------------------
-    # Paramètres
-    # -----------------------------
+    # =============================
+    # PARAMÈTRES
+    # =============================
     max_par_date = st.slider(
         "Nombre maximum d'enfants par date",
         1, 10, 3
     )
 
-    # -----------------------------
-    # Répartition
-    # -----------------------------
+    # =============================
+    # RÉPARTITION
+    # =============================
     repartition = {}
     deja_affectes = set()
     non_affectes = set()
 
     for _, row in df.iterrows():
-        date = str(row["date"]).strip()
-        noms = str(row["noms_dispos"])
+        date = str(row["Date"]).strip()
+        noms = str(row["Noms_dispos"])
 
         repartition.setdefault(date, [])
 
@@ -71,9 +81,9 @@ if uploaded_file:
             else:
                 non_affectes.add(nom)
 
-    # -----------------------------
-    # Affichage
-    # -----------------------------
+    # =============================
+    # AFFICHAGE
+    # =============================
     st.subheader("Répartition finale")
 
     for date, enfants in repartition.items():
@@ -88,9 +98,9 @@ if uploaded_file:
             "Non affectés : " + ", ".join(sorted(non_affectes))
         )
 
-    # -----------------------------
-    # Export CSV
-    # -----------------------------
+    # =============================
+    # EXPORT
+    # =============================
     export_df = pd.DataFrame([
         {
             "Date": date,
