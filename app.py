@@ -12,9 +12,10 @@ uploaded_file = st.file_uploader(
 if uploaded_file:
     # Lecture du CSV avec gestion d'encodage
     try:
-        df = pd.read_csv(uploaded_file, encoding="utf-8")
+    df = pd.read_csv(uploaded_file, encoding="utf-8", sep=";")
     except UnicodeDecodeError:
-        df = pd.read_csv(uploaded_file, encoding="latin1")
+    df = pd.read_csv(uploaded_file, encoding="latin1", sep=";")
+
 
     st.subheader("Aperçu des données importées")
     st.dataframe(df)
@@ -97,3 +98,4 @@ if uploaded_file:
         file_name="repartition.csv",
         mime="text/csv"
     )
+
