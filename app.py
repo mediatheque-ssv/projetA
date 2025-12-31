@@ -18,20 +18,25 @@ if uploaded_file:
     except UnicodeDecodeError:
         df = pd.read_csv(uploaded_file, encoding="latin1", sep=";")
 
-    # Normalisation des colonnes
-    df.columns = df.columns.str.replace("\ufeff", "", regex=False).str.strip()
-    
-    # Debug : colonnes détectées
-    st.write("Colonnes après nettoyage :", df.columns.tolist())
+    # 🔹 Normalisation des colonnes : suppression BOM, espaces, et casse
+    df.columns = [c.replace("\ufeff", "").strip().lower() for c in df.columns]
 
-    # Vérification des colonnes attendues
-    if not {"Date", "Noms_dispos"}.issubset(df.columns):
+    st.subheader("Colonnes détectées (après nettoyage)")
+    st.write(df.columns.tolist())
+
+    # Colonnes attendues
+    colonnes_attendues = ["date", "noms_dispos"]
+
+    if not all(c in df.columns for c in colonnes_attendues):
         st.error(
             f"Colonnes détectées : {df.columns.tolist()}\n"
-            "Colonnes attendues : Date, Noms_dispos\n\n"
-            "Assurez-vous que le séparateur est ';' et que les listes dans 'Noms_dispos' sont entre guillemets."
+            f"Colonnes attendues : {colonnes_attendues}\n\n"
+            "Assurez-vous que le séparateur est ';' et que les listes dans 'Noms_dispos' sont entre guillemets si elles contiennent des ';'."
         )
         st.stop()
+
+    # Renommer les colonnes pour usage interne
+    df = df.rename(columns={"date": "date", "noms_dispos": "noms_dispos"})
 
     st.subheader("Aperçu des données importées")
     st.dataframe(df)
@@ -54,12 +59,12 @@ if uploaded_file:
     non_affectes = set()
 
     for _, row in df.iterrows():
-        date = str(row["Date"]).strip()
-        noms_cellule = str(row["Noms_dispos"])
+        date = str(row["date"]).strip()
+        noms_cellule = str(row["noms_dispos"])
 
         repartition[date] = []
 
-        # Séparation des noms
+        # Séparer les noms dans la cellule
         noms = [n.strip() for n in noms_cellule.split(";") if n.strip()]
 
         for nom in noms:
