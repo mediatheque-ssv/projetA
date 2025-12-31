@@ -3,71 +3,41 @@ import pandas as pd
 
 st.title("Répartition bénévoles / enfants")
 
-# =====================================================
-# 1️⃣ IMPORT CSV
-# =====================================================
 uploaded_file = st.file_uploader("Importer le CSV", type=["csv"])
 if not uploaded_file:
     st.stop()
 
 # =====================================================
-# 2️⃣ LECTURE BRUTE (ON NE FAIT AUCUNE HYPOTHÈSE)
+# 1️⃣ LECTURE SANS EN-TÊTE (ON S'EN FOUT D'EXCEL)
 # =====================================================
 uploaded_file.seek(0)
-raw = uploaded_file.read().decode("utf-8-sig", errors="replace")
-
-lines = raw.splitlines()
-if not lines:
-    st.error("CSV vide")
-    st.stop()
+df_raw = pd.read_csv(
+    uploaded_file,
+    header=None,
+    encoding="utf-8-sig"
+)
 
 # =====================================================
-# 3️⃣ CORRECTION EN-TÊTE EXCEL ONLINE (CAS QUI TE BLOQUE)
+# 2️⃣ SI TOUT EST DANS UNE SEULE COLONNE → ON SPLIT
 # =====================================================
-header = lines[0]
-
-# Si l'en-tête est collé en une seule colonne
-if header.count(",") == 2:
-    sep = ","
-elif header.count(";") == 2:
-    sep = ";"
+if df_raw.shape[1] == 1:
+    df = df_raw[0].astype(str).str.split(",", expand=True)
 else:
-    st.error(f"En-tête invalide : {header}")
-    st.stop()
-
-# Reconstruction CSV propre
-clean_csv = "\n".join(lines)
+    df = df_raw.copy()
 
 # =====================================================
-# 4️⃣ LECTURE pandas PROPRE
+# 3️⃣ SUPPRESSION DE LA LIGNE D'EN-TÊTE EXCEL
 # =====================================================
-from io import StringIO
-
-df = pd.read_csv(
-    StringIO(clean_csv),
-    sep=sep,
-    encoding="utf-8"
-)
-
-# Nettoyage final colonnes
-df.columns = (
-    df.columns
-    .str.replace("\ufeff", "", regex=False)
-    .str.replace("ï»¿", "", regex=False)
-    .str.strip()
-)
+# On enlève la première ligne (Date,Horaires,Noms_dispos)
+df = df.iloc[1:].reset_index(drop=True)
 
 # =====================================================
-# 5️⃣ VÉRIFICATION (ENFIN OK)
+# 4️⃣ ON FORCE LES BONS NOMS DE COLONNES
 # =====================================================
-colonnes_attendues = ["Date", "Horaires", "Noms_dispos"]
-if list(df.columns) != colonnes_attendues:
-    st.error(
-        "Colonnes attendues : "
-        + ", ".join(colonnes_attendues)
-        + f"\nColonnes détectées : {df.columns.tolist()}"
-    )
-    st.stop()
+df.columns = ["Date", "Horaires", "Noms_dispos"]
 
+# =====================================================
+# 5️⃣ APERÇU
+# =====================================================
 st.success("CSV importé correctement ✅")
 st.dataframe(df)
