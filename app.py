@@ -36,7 +36,7 @@ if uploaded_file:
         st.stop()
 
     # Renommer les colonnes pour usage interne
-    df = df.rename(columns={"date": "date", "noms_dispos": "noms_dispos"})
+    df = df.rename(columns={"Date": "date", "Noms_dispos": "noms_dispos"})
 
     st.subheader("Aperçu des données importées")
     st.dataframe(df)
@@ -115,4 +115,5 @@ if uploaded_file:
         file_name="repartition.csv",
         mime="text/csv"
     )
+
 
