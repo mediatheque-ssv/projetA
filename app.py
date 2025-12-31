@@ -7,7 +7,7 @@ st.title("Répartition bénévoles / enfants")
 # 1️⃣ IMPORT DU CSV
 # =====================================================
 uploaded_file = st.file_uploader(
-    "Importer le CSV (Date ; Noms_dispos)",
+    "Importer le CSV (Date ; Horaires ; Noms_dispos)",
     type=["csv"]
 )
 
@@ -24,9 +24,10 @@ except Exception as e:
 df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
 
 # Vérification colonnes
-if "Date" not in df.columns or "Noms_dispos" not in df.columns:
+required_cols = ["Date", "Horaires", "Noms_dispos"]
+if not all(col in df.columns for col in required_cols):
     st.error(
-        "Le CSV doit contenir EXACTEMENT les colonnes : Date ; Noms_dispos\n"
+        f"Le CSV doit contenir EXACTEMENT les colonnes : {', '.join(required_cols)}\n"
         f"Colonnes détectées : {df.columns.tolist()}"
     )
     st.stop()
@@ -38,7 +39,7 @@ st.dataframe(df)
 # 2️⃣ PARAMÈTRES GÉNÉRAUX
 # =====================================================
 st.subheader("Paramètres généraux")
-max_par_date = st.slider("Nombre maximum d'enfants par créneau", 1, 10, 3)
+max_par_creneau = st.slider("Nombre maximum d'enfants par créneau", 1, 10, 3)
 
 # =====================================================
 # 3️⃣ EXTRACTION DES NOMS
@@ -51,10 +52,7 @@ noms_uniques = sorted({
 })
 
 st.subheader("Enfants détectés")
-if noms_uniques:
-    st.write(noms_uniques)
-else:
-    st.warning("Aucun enfant détecté ! Vérifie le CSV et le séparateur ';'")
+st.write(noms_uniques)
 
 # =====================================================
 # 4️⃣ BINÔMES (INTERFACE)
@@ -88,13 +86,12 @@ binomes = st.session_state.binomes
 # =====================================================
 # 5️⃣ OCCURRENCES MAXIMALES PAR ENFANT
 # =====================================================
-st.subheader("Nombre maximal d'occurrences par enfant")
+st.subheader("Nombre maximal d'occurrences par enfant (par mois)")
 max_occurrences = {}
-if noms_uniques:
-    for nom in noms_uniques:
-        max_occurrences[nom] = st.number_input(
-            nom, min_value=0, max_value=10, value=1, key=f"occ_{nom}"
-        )
+for nom in noms_uniques:
+    max_occurrences[nom] = st.number_input(
+        nom, min_value=0, max_value=10, value=1, key=f"occ_{nom}"
+    )
 
 # =====================================================
 # 6️⃣ RÉPARTITION
@@ -102,14 +99,17 @@ if noms_uniques:
 st.subheader("Répartition finale")
 repartition = {}
 compteur = {nom: 0 for nom in noms_uniques}
-deja_affectes_par_date = {}
+deja_affectes_par_date = {}  # Pour que chaque enfant apparaisse max 1 fois par jour
 
 for _, row in df.iterrows():
     date = str(row["Date"]).strip()
+    horaire = str(row["Horaires"]).strip()
+    creneau = f"{date} {horaire}"
     dispos = [n.strip() for n in str(row["Noms_dispos"]).split(";") if n.strip()]
 
-    repartition[date] = []
-    deja_affectes_par_date[date] = set()
+    repartition[creneau] = []
+    if date not in deja_affectes_par_date:
+        deja_affectes_par_date[date] = set()
 
     # ---- BINÔMES D'ABORD
     for a, b in binomes:
@@ -117,9 +117,11 @@ for _, row in df.iterrows():
             a in dispos and b in dispos
             and compteur.get(a, 0) < max_occurrences.get(a, 1)
             and compteur.get(b, 0) < max_occurrences.get(b, 1)
-            and len(repartition[date]) <= max_par_date - 2
+            and len(repartition[creneau]) <= max_par_creneau - 2
+            and a not in deja_affectes_par_date[date]
+            and b not in deja_affectes_par_date[date]
         ):
-            repartition[date].extend([a, b])
+            repartition[creneau].extend([a, b])
             compteur[a] += 1
             compteur[b] += 1
             deja_affectes_par_date[date].update([a, b])
@@ -129,20 +131,20 @@ for _, row in df.iterrows():
         if (
             nom not in deja_affectes_par_date[date]
             and compteur.get(nom, 0) < max_occurrences.get(nom, 1)
-            and len(repartition[date]) < max_par_date
+            and len(repartition[creneau]) < max_par_creneau
         ):
-            repartition[date].append(nom)
+            repartition[creneau].append(nom)
             compteur[nom] += 1
             deja_affectes_par_date[date].add(nom)
 
 # =====================================================
 # 7️⃣ AFFICHAGE
 # =====================================================
-for date, enfants in repartition.items():
+for creneau, enfants in repartition.items():
     st.write(
-        f"**{date}** : "
+        f"**{creneau}** : "
         f"{', '.join(enfants) if enfants else 'Aucun'} "
-        f"({max_par_date - len(enfants)} place(s) restante(s))"
+        f"({max_par_creneau - len(enfants)} place(s) restante(s))"
     )
 
 # Enfants non affectés
@@ -156,11 +158,11 @@ if non_affectes:
 # =====================================================
 export_df = pd.DataFrame([
     {
-        "Date": date,
+        "Date_Horaire": creneau,
         "Enfants_affectés": ";".join(enfants),
-        "Places_restantes": max_par_date - len(enfants)
+        "Places_restantes": max_par_creneau - len(enfants)
     }
-    for date, enfants in repartition.items()
+    for creneau, enfants in repartition.items()
 ])
 
 csv = export_df.to_csv(index=False, sep=";").encode("utf-8")
