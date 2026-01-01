@@ -121,7 +121,7 @@ def calcul_repartition(df, max_par_creneau, max_occ_global, binomes):
 if submit_button:
     repartition, non_affectes = calcul_repartition(df, max_par_creneau, max_occ_global, st.session_state.binomes)
 
-    # Création DataFrame temporaire pour tri sûr
+    # Création DataFrame à partir de la répartition
     temp_df = pd.DataFrame([
         {
             "Date": cle.split(" | ")[0].strip(),
@@ -131,14 +131,14 @@ if submit_button:
         for cle in repartition.keys()
     ])
 
-    # Conversion des dates avec erreurs ignorées
+    # Conversion date en datetime pour tri
     temp_df["Date_parsed"] = pd.to_datetime(temp_df["Date"], dayfirst=True, errors='coerce')
 
     # Tri par date puis horaire
-    temp_df = temp_df.sort_values(["Date_parsed", "Horaire"])
+    temp_df = temp_df.sort_values(by=["Date_parsed", "Horaire"])
 
+    # ================== Affichage trié ==================
     st.subheader("Répartition finale (triée par date)")
-
     for idx, row in temp_df.iterrows():
         enfants_du_creneau = row["Enfants"]
         places_restantes = max_par_creneau - len(enfants_du_creneau)
@@ -150,7 +150,7 @@ if submit_button:
         st.subheader("Enfants non affectés")
         st.write(", ".join(non_affectes))
 
-    # Export CSV trié
+    # ================== Export CSV trié ==================
     export_df = pd.DataFrame([
         {
             "Date_Horaire": f"{row['Date']} | {row['Horaire']}",
