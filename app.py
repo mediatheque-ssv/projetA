@@ -19,9 +19,13 @@ if df_raw.shape[1] == 1:
 else:
     df = df_raw.copy()
 
-# Supprimer ligne d'en-tête Excel si nécessaire
 df = df.iloc[1:].reset_index(drop=True)
 df.columns = ["Date", "Horaires", "Noms_dispos"]
+
+# Nettoyage : enlever espaces invisibles
+df["Date"] = df["Date"].astype(str).str.strip()
+df["Horaires"] = df["Horaires"].astype(str).str.strip()
+df["Noms_dispos"] = df["Noms_dispos"].astype(str).str.strip()
 
 st.success("CSV importé correctement ✅")
 st.dataframe(df)
@@ -77,10 +81,10 @@ def calcul_repartition(df, max_par_creneau, max_occ_global, binomes):
     df_shuffled = df.sample(frac=1, random_state=random.randint(0, 1000)).reset_index(drop=True)
 
     for _, row in df_shuffled.iterrows():
-        date = str(row["Date"]).strip()
-        horaire = str(row["Horaires"]).strip()
+        date = row["Date"]
+        horaire = row["Horaires"]
         cle = f"{date} | {horaire}"
-        dispo = [n.strip() for n in str(row["Noms_dispos"]).split(";") if n.strip()]
+        dispo = [n.strip() for n in row["Noms_dispos"].split(";") if n.strip()]
         repartition[cle] = []
 
         # Binômes
@@ -117,19 +121,20 @@ if submit_button:
 
     st.subheader("Répartition finale (triée par date)")
 
-    # Tri robuste par date puis horaire
-    def cle_tri(x):
-        date_str, horaire_str = x.split(" | ")
-        date_str = date_str.strip()
-        try:
-            date_parsed = pd.to_datetime(date_str, dayfirst=True, errors='coerce')
-        except:
-            date_parsed = pd.Timestamp.min
-        if pd.isna(date_parsed):
-            date_parsed = pd.Timestamp.min
-        return (date_parsed, horaire_str.strip())
+    # Créer un DataFrame temporaire pour trier correctement
+    temp_df = pd.DataFrame([
+        {
+            "cle": cle,
+            "date_parsed": pd.to_datetime(cle.split(" | ")[0], dayfirst=True, errors='coerce'),
+            "horaire": cle.split(" | ")[1].strip()
+        }
+        for cle in repartition.keys()
+    ])
 
-    for cle in sorted(repartition.keys(), key=cle_tri):
+    temp_df = temp_df.sort_values(["date_parsed", "horaire"])
+
+    for idx, row in temp_df.iterrows():
+        cle = row["cle"]
         lst = repartition[cle]
         st.write(f"**{cle}** : {', '.join(lst) if lst else 'Aucun'} ({max_par_creneau - len(lst)} place(s) restante(s))")
 
@@ -140,11 +145,11 @@ if submit_button:
     # Export CSV trié
     export_df = pd.DataFrame([
         {
-            "Date_Horaire": cle,
-            "Enfants": ";".join(repartition[cle]),
-            "Places_restantes": max_par_creneau - len(repartition[cle])
+            "Date_Horaire": row["cle"],
+            "Enfants": ";".join(repartition[row["cle"]]),
+            "Places_restantes": max_par_creneau - len(repartition[row["cle"]])
         }
-        for cle in sorted(repartition.keys(), key=cle_tri)
+        for idx, row in temp_df.iterrows()
     ])
     csv = export_df.to_csv(index=False, sep=";", encoding="utf-8-sig")
     st.download_button("Télécharger la répartition CSV", data=csv, file_name="repartition.csv", mime="text/csv")
