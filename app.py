@@ -1,12 +1,11 @@
 import streamlit as st
 import pandas as pd
 import random
-from io import StringIO
 
 st.title("Répartition égalitaire bénévoles / enfants")
 
 # =====================================================
-# 1️⃣ IMPORT DU CSV (détection automatique du séparateur)
+# 1️⃣ IMPORT DU CSV
 # =====================================================
 uploaded_file = st.file_uploader(
     "Importer le CSV (Date ; Horaires ; Noms_dispos)",
@@ -16,25 +15,21 @@ uploaded_file = st.file_uploader(
 if not uploaded_file:
     st.stop()
 
-# Lire le fichier en texte pour détecter séparateur
-try:
-    content = uploaded_file.getvalue().decode("utf-8-sig")  # supprime BOM si présent
-    first_line = content.splitlines()[0]
-    sep = ";" if ";" in first_line else ","
-    df = pd.read_csv(StringIO(content), sep=sep, engine="python")
-except Exception as e:
-    st.error(f"Erreur de lecture du CSV : {e}")
+# Essayons de deviner le séparateur
+for sep in [";", ","]:
+    try:
+        df = pd.read_csv(uploaded_file, sep=sep, encoding="utf-8-sig", engine="python")
+        # Vérification si on a les bonnes colonnes
+        if "Date" in df.columns and "Horaires" in df.columns and "Noms_dispos" in df.columns:
+            break
+    except Exception:
+        continue
+else:
+    st.error("Impossible de lire le CSV. Vérifie qu'il contient les colonnes : Date ; Horaires ; Noms_dispos")
     st.stop()
 
-# Nettoyage colonnes
-df.columns = [c.strip() for c in df.columns]
-
-if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
-    st.error(
-        "Le CSV doit contenir EXACTEMENT les colonnes : Date, Horaires, Noms_dispos\n"
-        f"Colonnes détectées : {df.columns.tolist()}"
-    )
-    st.stop()
+# Nettoyage des colonnes (supprime BOM et espaces)
+df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
 
 st.subheader("Aperçu du CSV")
 st.dataframe(df)
@@ -50,56 +45,46 @@ noms_uniques = sorted({
 })
 
 st.subheader("Enfants détectés")
-if noms_uniques:
-    st.write(noms_uniques)
-else:
-    st.warning("Aucun enfant détecté ! Vérifie le CSV et le séparateur ';'")
+st.write(noms_uniques)
 
 # =====================================================
 # 3️⃣ PARAMÈTRES GÉNÉRAUX
 # =====================================================
 st.subheader("Paramètres généraux")
-min_par_date = st.number_input("Nombre minimal d'enfants par créneau", min_value=1, max_value=10, value=2)
-max_par_date = st.number_input(
+
+min_par_date = st.slider("Nombre minimal d'enfants par créneau", 1, 10, 3)
+max_par_date = st.slider(
     "Nombre maximal d'enfants par créneau",
     min_value=min_par_date, max_value=10, value=max(5, min_par_date)
 )
 
-# =====================================================
-# 4️⃣ OCCURRENCES MAXIMALES GLOBALES
-# =====================================================
-total_creneaux = len(df)
+total_creaneaux = len(df)
 if noms_uniques:
-    places_totales = total_creneaux * max_par_date
+    places_totales = total_creaneaux * max_par_date
     occ_recommandee = round(places_totales / len(noms_uniques))
-    st.info(f"Total créneaux : {total_creneaux}, Places totales : {places_totales} → Occurrence idéale par enfant ≈ {occ_recommandee}")
+    st.info(f"Total créneaux : {total_creaneaux}, Places totales : {places_totales} → Occurrence idéale par enfant ≈ {occ_recommandee}")
     max_occ_global = st.number_input(
-        "Nombre maximal d'occurrences par enfant (pour tous)",
+        "Nombre maximal d'occurrences par enfant (identique pour tous)",
         min_value=1,
-        max_value=total_creneaux,
+        max_value=total_creaneaux,
         value=occ_recommandee
     )
 
 # =====================================================
-# 5️⃣ BINÔMES (INTERFACE)
+# 4️⃣ BINÔMES (INTERFACE)
 # =====================================================
 st.subheader("Binômes à ne pas séparer")
 if "binomes" not in st.session_state:
     st.session_state.binomes = []
 
-if noms_uniques:
-    col1, col2 = st.columns(2)
-    with col1:
-        enfant_a = st.selectbox("Enfant A", noms_uniques, key="a")
-    with col2:
-        enfant_b = st.selectbox("Enfant B", noms_uniques, key="b")
+col1, col2 = st.columns(2)
+with col1:
+    enfant_a = st.selectbox("Enfant A", noms_uniques, key="a")
+with col2:
+    enfant_b = st.selectbox("Enfant B", noms_uniques, key="b")
 
-    if (
-        enfant_a != enfant_b
-        and st.button("Ajouter le binôme")
-        and (enfant_a, enfant_b) not in st.session_state.binomes
-        and (enfant_b, enfant_a) not in st.session_state.binomes
-    ):
+if st.button("Ajouter le binôme"):
+    if enfant_a != enfant_b and (enfant_a, enfant_b) not in st.session_state.binomes and (enfant_b, enfant_a) not in st.session_state.binomes:
         st.session_state.binomes.append((enfant_a, enfant_b))
 
 if st.session_state.binomes:
@@ -110,7 +95,7 @@ if st.session_state.binomes:
 binomes = st.session_state.binomes
 
 # =====================================================
-# 6️⃣ RÉPARTITION ÉGALITAIRE
+# 5️⃣ RÉPARTITION ÉGALITAIRE
 # =====================================================
 if st.button("Répartir les enfants"):
 
@@ -128,21 +113,13 @@ if st.button("Répartir les enfants"):
         deja_affectes_par_date[cle] = set()
 
         # ---- BINÔMES
-        binomes_dispos = []
-        for a, b in binomes:
-            if (
-                a in dispos and b in dispos
-                and compteur[a] < max_occ_global
-                and compteur[b] < max_occ_global
-                and len(repartition[cle]) <= max_par_date - 2
-            ):
-                binomes_dispos.append((a, b))
+        binomes_dispos = [(a,b) for a,b in binomes if a in dispos and b in dispos and compteur[a] < max_occ_global and compteur[b] < max_occ_global and len(repartition[cle]) <= max_par_date-2]
         random.shuffle(binomes_dispos)
-        for a, b in binomes_dispos:
-            repartition[cle].extend([a, b])
+        for a,b in binomes_dispos:
+            repartition[cle].extend([a,b])
             compteur[a] += 1
             compteur[b] += 1
-            deja_affectes_par_date[cle].update([a, b])
+            deja_affectes_par_date[cle].update([a,b])
 
         # ---- SOLO, triés par moins de présences
         solos_dispos = [n for n in dispos if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global]
@@ -168,7 +145,7 @@ if st.button("Répartir les enfants"):
                     break
 
     # =====================================================
-    # 7️⃣ TRI PAR DATE + HORAIRE
+    # 6️⃣ TRI PAR DATE + HORAIRE
     # =====================================================
     def cle_tri(cle_str):
         date_str, horaire_str = cle_str.split("|")
@@ -182,15 +159,11 @@ if st.button("Répartir les enfants"):
     repartition_tri = dict(sorted(repartition.items(), key=cle_tri))
 
     # =====================================================
-    # 8️⃣ AFFICHAGE
+    # 7️⃣ AFFICHAGE
     # =====================================================
     st.subheader("Répartition finale (triée par date)")
     for cle, enfants in repartition_tri.items():
-        st.write(
-            f"{cle} : "
-            f"{', '.join(enfants) if enfants else 'Aucun'} "
-            f"({max_par_date - len(enfants)} place(s) restante(s))"
-        )
+        st.write(f"{cle} : {', '.join(enfants) if enfants else 'Aucun'} ({max_par_date - len(enfants)} place(s) restante(s))")
 
     st.subheader("Occurrences par enfant")
     st.write(dict(sorted(compteur.items())))
@@ -201,21 +174,12 @@ if st.button("Répartir les enfants"):
         st.write(", ".join(jamais_affectes))
 
     # =====================================================
-    # 9️⃣ EXPORT CSV
+    # 8️⃣ EXPORT CSV
     # =====================================================
     export_df = pd.DataFrame([
-        {
-            "Date_Horaire": cle,
-            "Enfants_affectés": ";".join(enfants),
-            "Places_restantes": max_par_date - len(enfants)
-        }
+        {"Date_Horaire": cle, "Enfants_affectés": ";".join(enfants), "Places_restantes": max_par_date - len(enfants)}
         for cle, enfants in repartition_tri.items()
     ])
 
     csv = export_df.to_csv(index=False, sep=";").encode("utf-8")
-    st.download_button(
-        "Télécharger la répartition CSV",
-        data=csv,
-        file_name="repartition.csv",
-        mime="text/csv"
-    )
+    st.download_button("Télécharger la répartition CSV", data=csv, file_name="repartition.csv", mime="text/csv")
