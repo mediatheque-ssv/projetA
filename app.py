@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
+import random
 
-st.title("Répartition bénévoles / enfants")
+st.title("Répartition égalitaire bénévoles / enfants")
 
 # =====================================================
 # 1️⃣ IMPORT DU CSV
@@ -62,7 +63,6 @@ max_par_date = st.slider("Nombre maximum d'enfants par créneau", 1, 10, 5)
 st.subheader("Occurrences maximales par enfant")
 total_creaneaux = len(df)
 if noms_uniques:
-    # calcul automatique
     places_totales = total_creaneaux * max_par_date
     occ_recommandee = round(places_totales / len(noms_uniques))
     st.info(f"Total créneaux : {total_creaneaux}, Places totales : {places_totales} → Occurrence idéale par enfant ≈ {occ_recommandee}")
@@ -103,7 +103,7 @@ if st.session_state.binomes:
 binomes = st.session_state.binomes
 
 # =====================================================
-# 6️⃣ RÉPARTITION
+# 6️⃣ RÉPARTITION ÉGALITAIRE
 # =====================================================
 if st.button("Répartir les enfants"):
 
@@ -111,6 +111,7 @@ if st.button("Répartir les enfants"):
     compteur = {nom: 0 for nom in noms_uniques}
     deja_affectes_par_date = {}
 
+    # On parcourt les créneaux
     for _, row in df.iterrows():
         date = str(row["Date"]).strip()
         horaire = str(row["Horaires"]).strip()
@@ -121,28 +122,34 @@ if st.button("Répartir les enfants"):
         deja_affectes_par_date[cle] = set()
 
         # ---- BINÔMES D'ABORD
+        binomes_dispos = []
         for a, b in binomes:
             if (
                 a in dispos and b in dispos
-                and compteur.get(a, 0) < max_occ_global
-                and compteur.get(b, 0) < max_occ_global
+                and compteur[a] < max_occ_global
+                and compteur[b] < max_occ_global
                 and len(repartition[cle]) <= max_par_date - 2
             ):
-                repartition[cle].extend([a, b])
-                compteur[a] += 1
-                compteur[b] += 1
-                deja_affectes_par_date[cle].update([a, b])
+                binomes_dispos.append((a, b))
+        # Mélange aléatoire pour varier l’ordre
+        random.shuffle(binomes_dispos)
+        for a, b in binomes_dispos:
+            repartition[cle].extend([a, b])
+            compteur[a] += 1
+            compteur[b] += 1
+            deja_affectes_par_date[cle].update([a, b])
 
-        # ---- ENSUITE LES SOLOS
-        for nom in dispos:
-            if (
-                nom not in deja_affectes_par_date[cle]
-                and compteur.get(nom, 0) < max_occ_global
-                and len(repartition[cle]) < max_par_date
-            ):
+        # ---- ENSUITE LES SOLO, triés par nombre de présences
+        solos_dispos = [n for n in dispos if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global]
+        # tri par compteur croissant
+        solos_dispos.sort(key=lambda x: compteur[x])
+        for nom in solos_dispos:
+            if len(repartition[cle]) < max_par_date:
                 repartition[cle].append(nom)
                 compteur[nom] += 1
                 deja_affectes_par_date[cle].add(nom)
+            else:
+                break
 
     # =====================================================
     # 7️⃣ TRI PAR DATE + HORAIRE
