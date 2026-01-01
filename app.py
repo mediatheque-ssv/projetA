@@ -13,11 +13,13 @@ if not uploaded_file:
 uploaded_file.seek(0)
 df_raw = pd.read_csv(uploaded_file, header=None, encoding="utf-8-sig")
 
+# Si tout est dans une colonne (virgules séparateurs)
 if df_raw.shape[1] == 1:
     df = df_raw[0].astype(str).str.split(",", expand=True)
 else:
     df = df_raw.copy()
 
+# Supprimer ligne d'en-tête Excel si nécessaire
 df = df.iloc[1:].reset_index(drop=True)
 df.columns = ["Date", "Horaires", "Noms_dispos"]
 
@@ -48,27 +50,31 @@ if st.button("Ajouter ce binôme"):
 
 if st.session_state.binomes:
     st.write("Binômes ajoutés :")
-    for x,y in st.session_state.binomes:
+    for x, y in st.session_state.binomes:
         st.write(f"- {x} + {y}")
 
 # ================== 4️⃣ Formulaire paramètres ==================
 with st.form("param_form"):
     st.subheader("Paramètres de répartition")
 
-    max_par_creneau = st.number_input("Nombre maximum d'enfants par créneau", min_value=1, max_value=10, value=3, step=1)
+    max_par_creneau = st.number_input(
+        "Nombre maximum d'enfants par créneau", min_value=1, max_value=10, value=3, step=1
+    )
     
     # Occurrence max globale pour tous
-    max_occ_global = st.number_input("Nombre maximal d'occurrences par enfant (par mois)", min_value=0, max_value=10, value=1, step=1)
+    max_occ_global = st.number_input(
+        "Nombre maximal d'occurrences par enfant (par mois)", min_value=0, max_value=10, value=1, step=1
+    )
 
     submit_button = st.form_submit_button("Répartir les enfants")
 
 # ================== 5️⃣ Calcul répartition ==================
 def calcul_repartition(df, max_par_creneau, max_occ_global, binomes):
     repartition = {}
-    compteur = {e:0 for e in enfants}
+    compteur = {e: 0 for e in enfants}
     presence_jour = defaultdict(set)
 
-    df_shuffled = df.sample(frac=1, random_state=random.randint(0,1000)).reset_index(drop=True)
+    df_shuffled = df.sample(frac=1, random_state=random.randint(0, 1000)).reset_index(drop=True)
 
     for _, row in df_shuffled.iterrows():
         date = str(row["Date"]).strip()
@@ -78,25 +84,31 @@ def calcul_repartition(df, max_par_creneau, max_occ_global, binomes):
         repartition[cle] = []
 
         # Binômes
-        for x,y in binomes:
-            if (x in dispo and y in dispo and
-                x not in presence_jour[date] and y not in presence_jour[date] and
-                compteur[x] < max_occ_global and compteur[y] < max_occ_global and
-                len(repartition[cle]) <= max_par_creneau-2):
-                repartition[cle] += [x,y]
-                compteur[x] +=1
-                compteur[y] +=1
-                presence_jour[date].update([x,y])
+        for x, y in binomes:
+            if (
+                x in dispo and y in dispo
+                and x not in presence_jour[date] and y not in presence_jour[date]
+                and compteur[x] < max_occ_global and compteur[y] < max_occ_global
+                and len(repartition[cle]) <= max_par_creneau - 2
+            ):
+                repartition[cle] += [x, y]
+                compteur[x] += 1
+                compteur[y] += 1
+                presence_jour[date].update([x, y])
 
         # Solos
         random.shuffle(dispo)
         for e in dispo:
-            if (e not in presence_jour[date] and compteur[e] < max_occ_global and len(repartition[cle]) < max_par_creneau):
+            if (
+                e not in presence_jour[date]
+                and compteur[e] < max_occ_global
+                and len(repartition[cle]) < max_par_creneau
+            ):
                 repartition[cle].append(e)
-                compteur[e] +=1
+                compteur[e] += 1
                 presence_jour[date].add(e)
 
-    non_affectes = [e for e,c in compteur.items() if c < max_occ_global]
+    non_affectes = [e for e, c in compteur.items() if c < max_occ_global]
     return repartition, non_affectes
 
 # ================== 6️⃣ Affichage si bouton cliqué ==================
@@ -105,11 +117,18 @@ if submit_button:
 
     st.subheader("Répartition finale (triée par date)")
 
-    # Tri des clés par date puis horaire
+    # Tri robuste par date puis horaire
     def cle_tri(x):
         date_str, horaire_str = x.split(" | ")
-        return (pd.to_datetime(date_str, dayfirst=True), horaire_str)
-    
+        date_str = date_str.strip()
+        try:
+            date_parsed = pd.to_datetime(date_str, dayfirst=True, errors='coerce')
+        except:
+            date_parsed = pd.Timestamp.min
+        if pd.isna(date_parsed):
+            date_parsed = pd.Timestamp.min
+        return (date_parsed, horaire_str.strip())
+
     for cle in sorted(repartition.keys(), key=cle_tri):
         lst = repartition[cle]
         st.write(f"**{cle}** : {', '.join(lst) if lst else 'Aucun'} ({max_par_creneau - len(lst)} place(s) restante(s))")
@@ -120,7 +139,11 @@ if submit_button:
 
     # Export CSV trié
     export_df = pd.DataFrame([
-        {"Date_Horaire": cle, "Enfants": ";".join(repartition[cle]), "Places_restantes": max_par_creneau - len(repartition[cle])}
+        {
+            "Date_Horaire": cle,
+            "Enfants": ";".join(repartition[cle]),
+            "Places_restantes": max_par_creneau - len(repartition[cle])
+        }
         for cle in sorted(repartition.keys(), key=cle_tri)
     ])
     csv = export_df.to_csv(index=False, sep=";", encoding="utf-8-sig")
