@@ -3,27 +3,28 @@ import pandas as pd
 from collections import defaultdict
 import random
 
-st.title("Répartition mini-bénévoles")
+st.title("Répartition bénévoles / enfants")
 
 # ================== 1️⃣ Import CSV ==================
 uploaded_file = st.file_uploader("Importer le CSV", type=["csv"])
 if not uploaded_file:
     st.stop()
 
+# Lecture CSV robuste
 uploaded_file.seek(0)
 df_raw = pd.read_csv(uploaded_file, header=None, encoding="utf-8-sig")
 
-# Si tout est dans une seule colonne (virgule séparateur)
+# Si tout est dans une colonne, on sépare par virgule
 if df_raw.shape[1] == 1:
     df = df_raw[0].astype(str).str.split(",", expand=True)
 else:
     df = df_raw.copy()
 
-# Supprimer la ligne d'en-tête si nécessaire
+# Supprimer ligne d'en-tête si nécessaire
 df = df.iloc[1:].reset_index(drop=True)
 df.columns = ["Date", "Horaires", "Noms_dispos"]
 
-# Nettoyage : enlever espaces et caractères invisibles
+# Nettoyage des colonnes
 df["Date"] = df["Date"].astype(str).str.strip()
 df["Horaires"] = df["Horaires"].astype(str).str.strip()
 df["Noms_dispos"] = df["Noms_dispos"].astype(str).str.strip()
@@ -78,6 +79,7 @@ def calcul_repartition(df, max_par_creneau, max_occ_global, binomes):
     compteur = {e: 0 for e in enfants}
     presence_jour = defaultdict(set)
 
+    # Mélange pour éviter toujours le même ordre
     df_shuffled = df.sample(frac=1, random_state=random.randint(0, 1000)).reset_index(drop=True)
 
     for _, row in df_shuffled.iterrows():
@@ -115,28 +117,30 @@ def calcul_repartition(df, max_par_creneau, max_occ_global, binomes):
     non_affectes = [e for e, c in compteur.items() if c < max_occ_global]
     return repartition, non_affectes
 
-# ================== 6️⃣ Affichage ==================
+# ================== 6️⃣ Affichage et export ==================
 if submit_button:
     repartition, non_affectes = calcul_repartition(df, max_par_creneau, max_occ_global, st.session_state.binomes)
 
-    # Créer DataFrame temporaire pour tri sûr
+    # Création DataFrame temporaire pour tri sûr
     temp_df = pd.DataFrame([
         {
-            "cle": cle,
-            "date_parsed": pd.to_datetime(cle.split(" | ")[0].strip(), dayfirst=True, errors='coerce'),
-            "horaire": cle.split(" | ")[1].strip()
+            "Date": cle.split(" | ")[0].strip(),
+            "Horaire": cle.split(" | ")[1].strip(),
+            "Enfants": repartition[cle]
         }
         for cle in repartition.keys()
     ])
 
-    temp_df = temp_df.sort_values(["date_parsed", "horaire"])
+    # Conversion des dates avec erreurs ignorées
+    temp_df["Date_parsed"] = pd.to_datetime(temp_df["Date"], dayfirst=True, errors='coerce')
+
+    # Tri par date puis horaire
+    temp_df = temp_df.sort_values(["Date_parsed", "Horaire"])
 
     st.subheader("Répartition finale (triée par date)")
 
     for idx, row in temp_df.iterrows():
-        cle = row["cle"]
-        lst = repartition[cle]
-        st.write(f"**{cle}** : {', '.join(lst) if lst else 'Aucun'} ({max_par_creneau - len(lst)} place(s) restante(s))")
+        st.write(f"**{row['Date']} | {row['Horaire']}** : {', '.join(row['Enfants']) if row['Enfants'] else 'Aucun'} ({max_par_creneau - len(row['Enfants'])} place(s) restante(s))")
 
     if non_affectes:
         st.subheader("Enfants non affectés")
@@ -145,9 +149,9 @@ if submit_button:
     # Export CSV trié
     export_df = pd.DataFrame([
         {
-            "Date_Horaire": row["cle"],
-            "Enfants": ";".join(repartition[row["cle"]]),
-            "Places_restantes": max_par_creneau - len(repartition[row["cle"]])
+            "Date_Horaire": f"{row['Date']} | {row['Horaire']}",
+            "Enfants": ";".join(row['Enfants']),
+            "Places_restantes": max_par_creneau - len(row['Enfants'])
         }
         for idx, row in temp_df.iterrows()
     ])
