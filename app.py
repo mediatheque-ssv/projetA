@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import random
 
-st.title("Répartition mini-bénévoles")
+st.title("Répartition égalitaire bénévoles / enfants")
 
 # =====================================================
 # 1️⃣ IMPORT DU CSV
@@ -53,13 +53,16 @@ else:
 # 3️⃣ PARAMÈTRES GÉNÉRAUX
 # =====================================================
 st.subheader("Paramètres généraux")
+
 min_par_date = st.slider("Nombre minimal d'enfants par créneau", 1, 10, 3)
-max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_par_date, 10, 5)
+max_par_date = st.slider(
+    "Nombre maximal d'enfants par créneau",
+    min_value=min_par_date, max_value=10, value=max(5, min_par_date)
+)
 
 # =====================================================
-# 4️⃣ OCCURRENCES MAXIMALES RECOMMANDÉES
+# 4️⃣ OCCURRENCES MAXIMALES GLOBALES
 # =====================================================
-st.subheader("Occurrences maximales par enfant")
 total_creaneaux = len(df)
 if noms_uniques:
     places_totales = total_creaneaux * max_par_date
@@ -149,7 +152,6 @@ if st.button("Répartir les enfants"):
 
         # ---- Vérification du minimum
         if len(repartition[cle]) < min_par_date:
-            # ajouter d’autres enfants disponibles même si ce n’est pas optimal
             restants = [n for n in noms_uniques if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global]
             random.shuffle(restants)
             for n in restants:
