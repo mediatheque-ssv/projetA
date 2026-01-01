@@ -140,7 +140,11 @@ if submit_button:
     st.subheader("Répartition finale (triée par date)")
 
     for idx, row in temp_df.iterrows():
-        st.write(f"**{row['Date']} | {row['Horaire']}** : {', '.join(row['Enfants']) if row['Enfants'] else 'Aucun'} ({max_par_creneau - len(row['Enfants'])} place(s) restante(s))")
+        enfants_du_creneau = row["Enfants"]
+        places_restantes = max_par_creneau - len(enfants_du_creneau)
+        st.write(f"**{row['Date']} | {row['Horaire']}** : "
+                 f"{', '.join(enfants_du_creneau) if enfants_du_creneau else 'Aucun'} "
+                 f"({places_restantes} place(s) restante(s))")
 
     if non_affectes:
         st.subheader("Enfants non affectés")
@@ -150,8 +154,8 @@ if submit_button:
     export_df = pd.DataFrame([
         {
             "Date_Horaire": f"{row['Date']} | {row['Horaire']}",
-            "Enfants": ";".join(row['Enfants']),
-            "Places_restantes": max_par_creneau - len(row['Enfants'])
+            "Enfants": ";".join(row["Enfants"]),
+            "Places_restantes": max_par_creneau - len(row["Enfants"])
         }
         for idx, row in temp_df.iterrows()
     ])
