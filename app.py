@@ -3,7 +3,7 @@ import pandas as pd
 from collections import defaultdict
 import random
 
-st.title("Répartition bénévoles / enfants")
+st.title("Répartition mini-bénévoles")
 
 # ================== 1️⃣ Import CSV ==================
 uploaded_file = st.file_uploader("Importer le CSV", type=["csv"])
@@ -13,16 +13,17 @@ if not uploaded_file:
 uploaded_file.seek(0)
 df_raw = pd.read_csv(uploaded_file, header=None, encoding="utf-8-sig")
 
-# Si tout est dans une colonne (virgules séparateurs)
+# Si tout est dans une seule colonne (virgule séparateur)
 if df_raw.shape[1] == 1:
     df = df_raw[0].astype(str).str.split(",", expand=True)
 else:
     df = df_raw.copy()
 
+# Supprimer la ligne d'en-tête si nécessaire
 df = df.iloc[1:].reset_index(drop=True)
 df.columns = ["Date", "Horaires", "Noms_dispos"]
 
-# Nettoyage : enlever espaces invisibles
+# Nettoyage : enlever espaces et caractères invisibles
 df["Date"] = df["Date"].astype(str).str.strip()
 df["Horaires"] = df["Horaires"].astype(str).str.strip()
 df["Noms_dispos"] = df["Noms_dispos"].astype(str).str.strip()
@@ -65,7 +66,6 @@ with st.form("param_form"):
         "Nombre maximum d'enfants par créneau", min_value=1, max_value=10, value=3, step=1
     )
     
-    # Occurrence max globale pour tous
     max_occ_global = st.number_input(
         "Nombre maximal d'occurrences par enfant (par mois)", min_value=0, max_value=10, value=1, step=1
     )
@@ -115,23 +115,23 @@ def calcul_repartition(df, max_par_creneau, max_occ_global, binomes):
     non_affectes = [e for e, c in compteur.items() if c < max_occ_global]
     return repartition, non_affectes
 
-# ================== 6️⃣ Affichage si bouton cliqué ==================
+# ================== 6️⃣ Affichage ==================
 if submit_button:
     repartition, non_affectes = calcul_repartition(df, max_par_creneau, max_occ_global, st.session_state.binomes)
 
-    st.subheader("Répartition finale (triée par date)")
-
-    # Créer un DataFrame temporaire pour trier correctement
+    # Créer DataFrame temporaire pour tri sûr
     temp_df = pd.DataFrame([
         {
             "cle": cle,
-            "date_parsed": pd.to_datetime(cle.split(" | ")[0], dayfirst=True, errors='coerce'),
+            "date_parsed": pd.to_datetime(cle.split(" | ")[0].strip(), dayfirst=True, errors='coerce'),
             "horaire": cle.split(" | ")[1].strip()
         }
         for cle in repartition.keys()
     ])
 
     temp_df = temp_df.sort_values(["date_parsed", "horaire"])
+
+    st.subheader("Répartition finale (triée par date)")
 
     for idx, row in temp_df.iterrows():
         cle = row["cle"]
