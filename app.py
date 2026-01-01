@@ -151,16 +151,16 @@ if st.button("Répartir les enfants"):
                 break
 
         # ---- Vérification du minimum
-        if len(repartition[cle]) < min_par_date:
-            restants = [n for n in noms_uniques if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global]
-            random.shuffle(restants)
-            for n in restants:
-                if len(repartition[cle]) < min_par_date:
-                    repartition[cle].append(n)
-                    compteur[n] += 1
-                    deja_affectes_par_date[cle].add(n)
-                else:
-                    break
+        while len(repartition[cle]) < min_par_date:
+            candidats = [n for n in noms_uniques if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global]
+            if not candidats:
+                break
+            # on choisit l'enfant dispo avec le moins de présences
+            candidats.sort(key=lambda x: compteur[x])
+            n = candidats[0]
+            repartition[cle].append(n)
+            compteur[n] += 1
+            deja_affectes_par_date[cle].add(n)
 
     # =====================================================
     # 7️⃣ TRI PAR DATE + HORAIRE
