@@ -56,14 +56,14 @@ with st.form("param_form"):
     st.subheader("Paramètres de répartition")
 
     max_par_creneau = st.number_input("Nombre maximum d'enfants par créneau", min_value=1, max_value=10, value=3, step=1)
-
-    st.markdown("**Occurrences max par enfant (par mois)**")
-    max_occ = {e: st.number_input(e, min_value=0, max_value=10, value=1, key=f"occ_{e}") for e in enfants}
+    
+    # Occurrence max globale pour tous
+    max_occ_global = st.number_input("Nombre maximal d'occurrences par enfant (par mois)", min_value=0, max_value=10, value=1, step=1)
 
     submit_button = st.form_submit_button("Répartir les enfants")
 
 # ================== 5️⃣ Calcul répartition ==================
-def calcul_repartition(df, max_par_creneau, max_occ, binomes):
+def calcul_repartition(df, max_par_creneau, max_occ_global, binomes):
     repartition = {}
     compteur = {e:0 for e in enfants}
     presence_jour = defaultdict(set)
@@ -81,7 +81,7 @@ def calcul_repartition(df, max_par_creneau, max_occ, binomes):
         for x,y in binomes:
             if (x in dispo and y in dispo and
                 x not in presence_jour[date] and y not in presence_jour[date] and
-                compteur[x] < max_occ[x] and compteur[y] < max_occ[y] and
+                compteur[x] < max_occ_global and compteur[y] < max_occ_global and
                 len(repartition[cle]) <= max_par_creneau-2):
                 repartition[cle] += [x,y]
                 compteur[x] +=1
@@ -91,30 +91,37 @@ def calcul_repartition(df, max_par_creneau, max_occ, binomes):
         # Solos
         random.shuffle(dispo)
         for e in dispo:
-            if (e not in presence_jour[date] and compteur[e] < max_occ[e] and len(repartition[cle]) < max_par_creneau):
+            if (e not in presence_jour[date] and compteur[e] < max_occ_global and len(repartition[cle]) < max_par_creneau):
                 repartition[cle].append(e)
                 compteur[e] +=1
                 presence_jour[date].add(e)
 
-    non_affectes = [e for e,c in compteur.items() if c < max_occ[e]]
+    non_affectes = [e for e,c in compteur.items() if c < max_occ_global]
     return repartition, non_affectes
 
 # ================== 6️⃣ Affichage si bouton cliqué ==================
 if submit_button:
-    repartition, non_affectes = calcul_repartition(df, max_par_creneau, max_occ, st.session_state.binomes)
+    repartition, non_affectes = calcul_repartition(df, max_par_creneau, max_occ_global, st.session_state.binomes)
 
-    st.subheader("Répartition finale")
-    for cle, lst in repartition.items():
+    st.subheader("Répartition finale (triée par date)")
+
+    # Tri des clés par date puis horaire
+    def cle_tri(x):
+        date_str, horaire_str = x.split(" | ")
+        return (pd.to_datetime(date_str, dayfirst=True), horaire_str)
+    
+    for cle in sorted(repartition.keys(), key=cle_tri):
+        lst = repartition[cle]
         st.write(f"**{cle}** : {', '.join(lst) if lst else 'Aucun'} ({max_par_creneau - len(lst)} place(s) restante(s))")
 
     if non_affectes:
         st.subheader("Enfants non affectés")
         st.write(", ".join(non_affectes))
 
-    # Export CSV
+    # Export CSV trié
     export_df = pd.DataFrame([
-        {"Date_Horaire": cle, "Enfants": ";".join(lst), "Places_restantes": max_par_creneau - len(lst)}
-        for cle,lst in repartition.items()
+        {"Date_Horaire": cle, "Enfants": ";".join(repartition[cle]), "Places_restantes": max_par_creneau - len(repartition[cle])}
+        for cle in sorted(repartition.keys(), key=cle_tri)
     ])
     csv = export_df.to_csv(index=False, sep=";", encoding="utf-8-sig")
     st.download_button("Télécharger la répartition CSV", data=csv, file_name="repartition.csv", mime="text/csv")
