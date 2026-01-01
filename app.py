@@ -50,11 +50,17 @@ else:
     st.warning("Aucun enfant détecté ! Vérifie le CSV et le séparateur ';'")
 
 # =====================================================
-# 3️⃣ PARAMÈTRES GÉNÉRAUX
+# 3️⃣ PARAMÈTRES DES CRÉNEAUX
 # =====================================================
-st.subheader("Paramètres généraux")
+st.subheader("Paramètres des créneaux")
 
-min_par_date = st.slider("Nombre minimal d'enfants par créneau", 1, 10, 3)
+# Slider minimum
+min_par_date = st.slider(
+    "Nombre minimal d'enfants par créneau",
+    min_value=1, max_value=10, value=3
+)
+
+# Slider maximum
 max_par_date = st.slider(
     "Nombre maximal d'enfants par créneau",
     min_value=min_par_date, max_value=10, value=max(5, min_par_date)
@@ -69,7 +75,7 @@ if noms_uniques:
     occ_recommandee = round(places_totales / len(noms_uniques))
     st.info(f"Total créneaux : {total_creaneaux}, Places totales : {places_totales} → Occurrence idéale par enfant ≈ {occ_recommandee}")
     max_occ_global = st.number_input(
-        "Définir le nombre maximal d'occurrences par enfant (pour tous)",
+        "Nombre maximal d'occurrences par enfant (pour tous)",
         min_value=1,
         max_value=total_creaneaux,
         value=occ_recommandee
@@ -151,16 +157,16 @@ if st.button("Répartir les enfants"):
                 break
 
         # ---- Vérification du minimum
-        while len(repartition[cle]) < min_par_date:
-            candidats = [n for n in noms_uniques if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global]
-            if not candidats:
-                break
-            # on choisit l'enfant dispo avec le moins de présences
-            candidats.sort(key=lambda x: compteur[x])
-            n = candidats[0]
-            repartition[cle].append(n)
-            compteur[n] += 1
-            deja_affectes_par_date[cle].add(n)
+        if len(repartition[cle]) < min_par_date:
+            restants = [n for n in noms_uniques if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global]
+            random.shuffle(restants)
+            for n in restants:
+                if len(repartition[cle]) < min_par_date:
+                    repartition[cle].append(n)
+                    compteur[n] += 1
+                    deja_affectes_par_date[cle].add(n)
+                else:
+                    break
 
     # =====================================================
     # 7️⃣ TRI PAR DATE + HORAIRE
