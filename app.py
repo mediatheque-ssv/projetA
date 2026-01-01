@@ -14,7 +14,7 @@ if not uploaded_file:
 uploaded_file.seek(0)
 df_raw = pd.read_csv(uploaded_file, header=None, encoding="utf-8-sig")
 
-# Si tout est dans une colonne, on sépare par virgule
+# Si tout est dans une seule colonne, on sépare par virgule
 if df_raw.shape[1] == 1:
     df = df_raw[0].astype(str).str.split(",", expand=True)
 else:
@@ -24,7 +24,7 @@ else:
 df = df.iloc[1:].reset_index(drop=True)
 df.columns = ["Date", "Horaires", "Noms_dispos"]
 
-# Nettoyage des colonnes
+# Nettoyage
 df["Date"] = df["Date"].astype(str).str.strip()
 df["Horaires"] = df["Horaires"].astype(str).str.strip()
 df["Noms_dispos"] = df["Noms_dispos"].astype(str).str.strip()
@@ -37,9 +37,8 @@ enfants = sorted({n.strip() for cell in df["Noms_dispos"] for n in str(cell).spl
 st.subheader("Enfants détectés")
 st.write(enfants)
 
-# ================== 3️⃣ Gestion des binômes ==================
+# ================== 3️⃣ Binômes ==================
 st.subheader("Binômes inséparables")
-
 if "binomes" not in st.session_state:
     st.session_state.binomes = []
 
@@ -59,7 +58,7 @@ if st.session_state.binomes:
     for x, y in st.session_state.binomes:
         st.write(f"- {x} + {y}")
 
-# ================== 4️⃣ Formulaire paramètres ==================
+# ================== 4️⃣ Paramètres ==================
 with st.form("param_form"):
     st.subheader("Paramètres de répartition")
 
@@ -73,7 +72,7 @@ with st.form("param_form"):
 
     submit_button = st.form_submit_button("Répartir les enfants")
 
-# ================== 5️⃣ Calcul répartition ==================
+# ================== 5️⃣ Fonction de répartition ==================
 def calcul_repartition(df, max_par_creneau, max_occ_global, binomes):
     repartition = {}
     compteur = {e: 0 for e in enfants}
@@ -117,11 +116,23 @@ def calcul_repartition(df, max_par_creneau, max_occ_global, binomes):
     non_affectes = [e for e, c in compteur.items() if c < max_occ_global]
     return repartition, non_affectes
 
-# ================== 6️⃣ Affichage et export ==================
+# ================== 6️⃣ Fonction extraction date pour tri ==================
+def extraire_date(date_str):
+    mois_map = {
+        "janvier": 1, "février": 2, "mars": 3, "avril": 4,
+        "mai": 5, "juin": 6, "juillet": 7, "août": 8,
+        "septembre": 9, "octobre": 10, "novembre": 11, "décembre": 12
+    }
+    parts = date_str.strip().split()
+    jour = next((int(p) for p in parts if p.isdigit()), 1)
+    mois = next((mois_map[p.lower()] for p in parts if p.lower() in mois_map), 1)
+    return pd.Timestamp(year=2026, month=mois, day=jour)
+
+# ================== 7️⃣ Répartition et affichage ==================
 if submit_button:
     repartition, non_affectes = calcul_repartition(df, max_par_creneau, max_occ_global, st.session_state.binomes)
 
-    # Création DataFrame à partir de la répartition
+    # DataFrame pour tri
     temp_df = pd.DataFrame([
         {
             "Date": cle.split(" | ")[0].strip(),
@@ -130,14 +141,12 @@ if submit_button:
         }
         for cle in repartition.keys()
     ])
-
-    # Conversion date en datetime pour tri
-    temp_df["Date_parsed"] = pd.to_datetime(temp_df["Date"], dayfirst=True, errors='coerce')
+    temp_df["Date_parsed"] = temp_df["Date"].apply(extraire_date)
 
     # Tri par date puis horaire
     temp_df = temp_df.sort_values(by=["Date_parsed", "Horaire"])
 
-    # ================== Affichage trié ==================
+    # Affichage trié
     st.subheader("Répartition finale (triée par date)")
     for idx, row in temp_df.iterrows():
         enfants_du_creneau = row["Enfants"]
@@ -150,7 +159,7 @@ if submit_button:
         st.subheader("Enfants non affectés")
         st.write(", ".join(non_affectes))
 
-    # ================== Export CSV trié ==================
+    # Export CSV trié
     export_df = pd.DataFrame([
         {
             "Date_Horaire": f"{row['Date']} | {row['Horaire']}",
