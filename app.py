@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import random
 
-st.title("Répartition égalitaire bénévoles / enfants")
+st.title("Répartition mini-bénévoles")
 
 # =====================================================
 # 1️⃣ IMPORT DU CSV
@@ -21,10 +21,8 @@ except Exception as e:
     st.error(f"Erreur de lecture du CSV : {e}")
     st.stop()
 
-# Nettoyage colonnes
 df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
 
-# Vérification colonnes
 if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
     st.error(
         "Le CSV doit contenir EXACTEMENT les colonnes : Date, Horaires, Noms_dispos\n"
@@ -55,7 +53,8 @@ else:
 # 3️⃣ PARAMÈTRES GÉNÉRAUX
 # =====================================================
 st.subheader("Paramètres généraux")
-max_par_date = st.slider("Nombre maximum d'enfants par créneau", 1, 10, 5)
+min_par_date = st.slider("Nombre minimal d'enfants par créneau", 1, 10, 3)
+max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_par_date, 10, 5)
 
 # =====================================================
 # 4️⃣ OCCURRENCES MAXIMALES RECOMMANDÉES
@@ -111,7 +110,6 @@ if st.button("Répartir les enfants"):
     compteur = {nom: 0 for nom in noms_uniques}
     deja_affectes_par_date = {}
 
-    # On parcourt les créneaux
     for _, row in df.iterrows():
         date = str(row["Date"]).strip()
         horaire = str(row["Horaires"]).strip()
@@ -121,7 +119,7 @@ if st.button("Répartir les enfants"):
         repartition[cle] = []
         deja_affectes_par_date[cle] = set()
 
-        # ---- BINÔMES D'ABORD
+        # ---- BINÔMES
         binomes_dispos = []
         for a, b in binomes:
             if (
@@ -131,7 +129,6 @@ if st.button("Répartir les enfants"):
                 and len(repartition[cle]) <= max_par_date - 2
             ):
                 binomes_dispos.append((a, b))
-        # Mélange aléatoire pour varier l’ordre
         random.shuffle(binomes_dispos)
         for a, b in binomes_dispos:
             repartition[cle].extend([a, b])
@@ -139,9 +136,8 @@ if st.button("Répartir les enfants"):
             compteur[b] += 1
             deja_affectes_par_date[cle].update([a, b])
 
-        # ---- ENSUITE LES SOLO, triés par nombre de présences
+        # ---- SOLO, triés par moins de présences
         solos_dispos = [n for n in dispos if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global]
-        # tri par compteur croissant
         solos_dispos.sort(key=lambda x: compteur[x])
         for nom in solos_dispos:
             if len(repartition[cle]) < max_par_date:
@@ -150,6 +146,19 @@ if st.button("Répartir les enfants"):
                 deja_affectes_par_date[cle].add(nom)
             else:
                 break
+
+        # ---- Vérification du minimum
+        if len(repartition[cle]) < min_par_date:
+            # ajouter d’autres enfants disponibles même si ce n’est pas optimal
+            restants = [n for n in noms_uniques if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global]
+            random.shuffle(restants)
+            for n in restants:
+                if len(repartition[cle]) < min_par_date:
+                    repartition[cle].append(n)
+                    compteur[n] += 1
+                    deja_affectes_par_date[cle].add(n)
+                else:
+                    break
 
     # =====================================================
     # 7️⃣ TRI PAR DATE + HORAIRE
@@ -161,7 +170,7 @@ if st.button("Répartir les enfants"):
         try:
             return (pd.to_datetime(date_str, dayfirst=True), horaire_str)
         except:
-            return (date_str, horaire_str)  # fallback si date invalide
+            return (date_str, horaire_str)
 
     repartition_tri = dict(sorted(repartition.items(), key=cle_tri))
 
@@ -176,12 +185,9 @@ if st.button("Répartir les enfants"):
             f"({max_par_date - len(enfants)} place(s) restante(s))"
         )
 
-    # Occurrences par enfant
     st.subheader("Occurrences par enfant")
-    compteur_tri = dict(sorted(compteur.items()))
-    st.write(compteur_tri)
+    st.write(dict(sorted(compteur.items())))
 
-    # Enfants jamais affectés
     jamais_affectes = [nom for nom, c in compteur.items() if c == 0]
     if jamais_affectes:
         st.subheader("Enfants jamais affectés")
