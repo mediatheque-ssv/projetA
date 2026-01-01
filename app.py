@@ -1,11 +1,12 @@
 import streamlit as st
 import pandas as pd
 import random
+from io import StringIO
 
 st.title("Répartition égalitaire bénévoles / enfants")
 
 # =====================================================
-# 1️⃣ IMPORT DU CSV
+# 1️⃣ IMPORT DU CSV (détection automatique du séparateur)
 # =====================================================
 uploaded_file = st.file_uploader(
     "Importer le CSV (Date ; Horaires ; Noms_dispos)",
@@ -15,13 +16,18 @@ uploaded_file = st.file_uploader(
 if not uploaded_file:
     st.stop()
 
+# Lire le fichier en texte pour détecter séparateur
 try:
-    df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
+    content = uploaded_file.getvalue().decode("utf-8-sig")  # supprime BOM si présent
+    first_line = content.splitlines()[0]
+    sep = ";" if ";" in first_line else ","
+    df = pd.read_csv(StringIO(content), sep=sep, engine="python")
 except Exception as e:
     st.error(f"Erreur de lecture du CSV : {e}")
     st.stop()
 
-df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
+# Nettoyage colonnes
+df.columns = [c.strip() for c in df.columns]
 
 if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
     st.error(
@@ -50,35 +56,32 @@ else:
     st.warning("Aucun enfant détecté ! Vérifie le CSV et le séparateur ';'")
 
 # =====================================================
-# 3️⃣ PARAMÈTRES DE RÉPARTITION (après import CSV)
+# 3️⃣ PARAMÈTRES GÉNÉRAUX
 # =====================================================
-st.subheader("Paramètres de répartition")
-
-min_par_date = st.slider(
-    "Nombre minimal d'enfants par créneau",
-    min_value=1, max_value=10, value=3
-)
-
-max_par_date = st.slider(
+st.subheader("Paramètres généraux")
+min_par_date = st.number_input("Nombre minimal d'enfants par créneau", min_value=1, max_value=10, value=2)
+max_par_date = st.number_input(
     "Nombre maximal d'enfants par créneau",
     min_value=min_par_date, max_value=10, value=max(5, min_par_date)
 )
 
-# Occurrences globales
-total_creaneaux = len(df)
+# =====================================================
+# 4️⃣ OCCURRENCES MAXIMALES GLOBALES
+# =====================================================
+total_creneaux = len(df)
 if noms_uniques:
-    places_totales = total_creaneaux * max_par_date
+    places_totales = total_creneaux * max_par_date
     occ_recommandee = round(places_totales / len(noms_uniques))
-    st.info(f"Total créneaux : {total_creaneaux}, Places totales : {places_totales} → Occurrence idéale par enfant ≈ {occ_recommandee}")
+    st.info(f"Total créneaux : {total_creneaux}, Places totales : {places_totales} → Occurrence idéale par enfant ≈ {occ_recommandee}")
     max_occ_global = st.number_input(
         "Nombre maximal d'occurrences par enfant (pour tous)",
         min_value=1,
-        max_value=total_creaneaux,
+        max_value=total_creneaux,
         value=occ_recommandee
     )
 
 # =====================================================
-# 4️⃣ BINÔMES (INTERFACE)
+# 5️⃣ BINÔMES (INTERFACE)
 # =====================================================
 st.subheader("Binômes à ne pas séparer")
 if "binomes" not in st.session_state:
@@ -107,7 +110,7 @@ if st.session_state.binomes:
 binomes = st.session_state.binomes
 
 # =====================================================
-# 5️⃣ RÉPARTITION ÉGALITAIRE
+# 6️⃣ RÉPARTITION ÉGALITAIRE
 # =====================================================
 if st.button("Répartir les enfants"):
 
@@ -165,7 +168,7 @@ if st.button("Répartir les enfants"):
                     break
 
     # =====================================================
-    # 6️⃣ TRI PAR DATE + HORAIRE
+    # 7️⃣ TRI PAR DATE + HORAIRE
     # =====================================================
     def cle_tri(cle_str):
         date_str, horaire_str = cle_str.split("|")
@@ -179,7 +182,7 @@ if st.button("Répartir les enfants"):
     repartition_tri = dict(sorted(repartition.items(), key=cle_tri))
 
     # =====================================================
-    # 7️⃣ AFFICHAGE
+    # 8️⃣ AFFICHAGE
     # =====================================================
     st.subheader("Répartition finale (triée par date)")
     for cle, enfants in repartition_tri.items():
@@ -198,7 +201,7 @@ if st.button("Répartir les enfants"):
         st.write(", ".join(jamais_affectes))
 
     # =====================================================
-    # 8️⃣ EXPORT CSV
+    # 9️⃣ EXPORT CSV
     # =====================================================
     export_df = pd.DataFrame([
         {
