@@ -13,13 +13,11 @@ if not uploaded_file:
 uploaded_file.seek(0)
 df_raw = pd.read_csv(uploaded_file, header=None, encoding="utf-8-sig")
 
-# Split si tout dans une colonne
 if df_raw.shape[1] == 1:
     df = df_raw[0].astype(str).str.split(",", expand=True)
 else:
     df = df_raw.copy()
 
-# Supprimer ligne d'en-tête Excel
 df = df.iloc[1:].reset_index(drop=True)
 df.columns = ["Date", "Horaires", "Noms_dispos"]
 
@@ -31,36 +29,40 @@ enfants = sorted({n.strip() for cell in df["Noms_dispos"] for n in str(cell).spl
 st.subheader("Enfants détectés")
 st.write(enfants)
 
-# ================== 3️⃣ Formulaire paramètres ==================
+# ================== 3️⃣ Gestion des binômes ==================
+st.subheader("Binômes inséparables")
+
+if "binomes" not in st.session_state:
+    st.session_state.binomes = []
+
+col1, col2 = st.columns(2)
+with col1:
+    enfant_a = st.selectbox("Enfant A", enfants)
+with col2:
+    enfant_b = st.selectbox("Enfant B", enfants)
+
+if st.button("Ajouter ce binôme"):
+    if enfant_a != enfant_b:
+        if (enfant_a, enfant_b) not in st.session_state.binomes and (enfant_b, enfant_a) not in st.session_state.binomes:
+            st.session_state.binomes.append((enfant_a, enfant_b))
+
+if st.session_state.binomes:
+    st.write("Binômes ajoutés :")
+    for x,y in st.session_state.binomes:
+        st.write(f"- {x} + {y}")
+
+# ================== 4️⃣ Formulaire paramètres ==================
 with st.form("param_form"):
     st.subheader("Paramètres de répartition")
-    
-    max_par_creneau = st.number_input("Nombre maximum d'enfants par créneau", min_value=1, max_value=10, value=3, step=1)
-    
-    # Binômes
-    st.markdown("**Binômes inséparables**")
-    binomes = []
-    col1, col2 = st.columns(2)
-    with col1:
-        enfant_a = st.selectbox("Enfant A", enfants, key="a")
-    with col2:
-        enfant_b = st.selectbox("Enfant B", enfants, key="b")
-    if st.form_submit_button("Ajouter ce binôme"):
-        if enfant_a != enfant_b:
-            binomes.append((enfant_a, enfant_b))
-    if binomes:
-        st.write("Binômes ajoutés :")
-        for x,y in binomes:
-            st.write(f"- {x} + {y}")
 
-    # Occurrences max
+    max_par_creneau = st.number_input("Nombre maximum d'enfants par créneau", min_value=1, max_value=10, value=3, step=1)
+
     st.markdown("**Occurrences max par enfant (par mois)**")
     max_occ = {e: st.number_input(e, min_value=0, max_value=10, value=1, key=f"occ_{e}") for e in enfants}
-    
-    # Bouton pour lancer la répartition
+
     submit_button = st.form_submit_button("Répartir les enfants")
 
-# ================== 4️⃣ Calcul répartition ==================
+# ================== 5️⃣ Calcul répartition ==================
 def calcul_repartition(df, max_par_creneau, max_occ, binomes):
     repartition = {}
     compteur = {e:0 for e in enfants}
@@ -97,10 +99,10 @@ def calcul_repartition(df, max_par_creneau, max_occ, binomes):
     non_affectes = [e for e,c in compteur.items() if c < max_occ[e]]
     return repartition, non_affectes
 
-# ================== 5️⃣ Affichage si bouton cliqué ==================
+# ================== 6️⃣ Affichage si bouton cliqué ==================
 if submit_button:
-    repartition, non_affectes = calcul_repartition(df, max_par_creneau, max_occ, binomes)
-    
+    repartition, non_affectes = calcul_repartition(df, max_par_creneau, max_occ, st.session_state.binomes)
+
     st.subheader("Répartition finale")
     for cle, lst in repartition.items():
         st.write(f"**{cle}** : {', '.join(lst) if lst else 'Aucun'} ({max_par_creneau - len(lst)} place(s) restante(s))")
