@@ -1,226 +1,189 @@
 import streamlit as st
 import pandas as pd
-import random
+from datetime import timedelta
 
-st.title("Répartition enfants – groupes inséparables")
+st.set_page_config(layout="wide")
+st.title("Répartition humaine des enfants (logique progressive)")
 
 # =====================================================
-# 1️⃣ Import CSV
+# 1️⃣ IMPORT CSV
 # =====================================================
-uploaded_file = st.file_uploader(
-    "Importer le CSV (Date ; Horaires ; Noms_dispos)",
-    type=["csv"]
-)
+uploaded_file = st.file_uploader("Importer le CSV (Date ; Horaires ; Noms_dispos)", type=["csv"])
 
 if not uploaded_file:
     st.stop()
 
-df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
-df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
-
-if not {"Date", "Horaires", "Noms_dispos"}.issubset(df.columns):
-    st.error("Colonnes requises : Date ; Horaires ; Noms_dispos")
-    st.stop()
+df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig")
+df.columns = [c.strip() for c in df.columns]
 
 # =====================================================
-# 2️⃣ Enfants détectés
-# =====================================================
-sample = str(df["Noms_dispos"].iloc[0])
-separator = "," if "," in sample else ";"
-
-noms = sorted({
-    n.strip()
-    for cell in df["Noms_dispos"]
-    if pd.notna(cell)
-    for n in str(cell).split(separator)
-    if n.strip()
-})
-
-# =====================================================
-# 3️⃣ Paramètres globaux
+# 2️⃣ PARAMÈTRES SIMPLES
 # =====================================================
 st.subheader("Paramètres globaux")
-min_par_date = st.slider("Min enfants par créneau", 1, 10, 2)
-max_par_date = st.slider("Max enfants par créneau", min_par_date, 10, 5)
-delai_min = st.slider("Délai minimum entre deux présences (jours)", 0, 14, 7)
+
+col1, col2, col3 = st.columns(3)
+with col1:
+    min_par_creneau = st.number_input("Min enfants par créneau", 1, 10, 4)
+    max_par_creneau = st.number_input("Max enfants par créneau", min_par_creneau, 10, 5)
+with col2:
+    delai_min = st.number_input("Délai minimum entre 2 présences (jours)", 1, 21, 7)
+with col3:
+    min_occ = st.number_input("Occurrence minimale par enfant", 0, 10, 2)
+    max_occ = st.number_input("Occurrence maximale par enfant", min_occ, 20, 6)
 
 # =====================================================
-# 4️⃣ Binômes
+# 3️⃣ BINÔMES
 # =====================================================
 st.subheader("Binômes inséparables")
+
+all_names = sorted(set(
+    n.strip()
+    for cell in df["Noms_dispos"]
+    for n in str(cell).replace(",", ";").split(";")
+))
 
 if "binomes" not in st.session_state:
     st.session_state.binomes = []
 
-a = st.selectbox("Enfant A", noms)
-b = st.selectbox("Enfant B", noms)
+c1, c2 = st.columns(2)
+with c1:
+    a = st.selectbox("Enfant A", all_names)
+with c2:
+    b = st.selectbox("Enfant B", all_names)
 
-if st.button("Ajouter le binôme"):
-    if a != b:
+if st.button("Ajouter binôme") and a != b:
+    if (a, b) not in st.session_state.binomes and (b, a) not in st.session_state.binomes:
         st.session_state.binomes.append((a, b))
 
-for x, y in st.session_state.binomes:
-    st.write(f"• {x} + {y}")
+st.write(st.session_state.binomes)
 
 # =====================================================
-# 5️⃣ Groupes
+# 4️⃣ DATES
 # =====================================================
-groupes = []
-utilises = set()
-
-for a, b in st.session_state.binomes:
-    groupes.append([a, b])
-    utilises.update([a, b])
-
-for n in noms:
-    if n not in utilises:
-        groupes.append([n])
-
-# =====================================================
-# 6️⃣ Dates
-# =====================================================
-mois = {
-    "janvier": 1,
-    "février": 2,
-    "fevrier": 2,
-    "mars": 3
+mois_fr = {
+    "janvier": 1, "février": 2, "fevrier": 2,
+    "mars": 3, "avril": 4
 }
 
 def parse_dt(row):
-    try:
-        d = str(row["Date"]).lower().split()
-        h = str(row["Horaires"])
-        return pd.Timestamp(
-            year=2026,
-            month=mois[d[2]],
-            day=int(d[1]),
-            hour=int(h.split("h")[0])
-        )
-    except:
-        return pd.Timestamp("1900-01-01")
+    parts = str(row["Date"]).lower().split()
+    jour = int(parts[1])
+    mois = mois_fr[parts[2]]
+    heure = int(str(row["Horaires"]).split("h")[0])
+    return pd.Timestamp(year=2026, month=mois, day=jour, hour=heure)
 
 df["dt"] = df.apply(parse_dt, axis=1)
 df = df.sort_values("dt")
 
+# =====================================================
+# 5️⃣ CRÉNEAUX
+# =====================================================
 creneaux = []
-for _, r in df.iterrows():
-    if r["dt"] == pd.Timestamp("1900-01-01"):
-        continue
+for _, row in df.iterrows():
+    dispos = [n.strip() for n in str(row["Noms_dispos"]).replace(",", ";").split(";")]
     creneaux.append({
-        "cle": f"{r['Date']} | {r['Horaires']}",
-        "dt": r["dt"],
-        "dispos": [n.strip() for n in str(r["Noms_dispos"]).split(separator)],
+        "cle": f"{row['Date']} | {row['Horaires']}",
+        "dt": row["dt"],
+        "dispos": dispos,
         "affectes": []
     })
 
 # =====================================================
-# 7️⃣ Dispos max par groupe
+# 6️⃣ BLOCS (binômes fusionnés)
 # =====================================================
-def groupe_dispo(g, dispo):
-    return all(m in dispo for m in g)
+bloc_map = {}
+used = set()
 
-dispo_max = {
-    tuple(g): sum(groupe_dispo(g, str(c).split(separator)) for c in df["Noms_dispos"])
-    for g in groupes
-}
+for a, b in st.session_state.binomes:
+    bloc_map[a] = f"{a}+{b}"
+    bloc_map[b] = f"{a}+{b}"
+    used.update([a, b])
 
-# =====================================================
-# 8️⃣ Min / Max par groupe
-# =====================================================
-st.subheader("Occurrences par groupe")
+for n in all_names:
+    if n not in used:
+        bloc_map[n] = n
 
-occ_min = {}
-occ_max = {}
-
-for g in groupes:
-    key = tuple(g)
-    label = " + ".join(g)
-    col1, col2 = st.columns(2)
-
-    with col1:
-        occ_min[key] = st.number_input(
-            f"{label} – MIN (max dispo {dispo_max[key]})",
-            0,
-            dispo_max[key],
-            min(1, dispo_max[key])
-        )
-    with col2:
-        occ_max[key] = st.number_input(
-            f"{label} – MAX",
-            occ_min[key],
-            dispo_max[key],
-            dispo_max[key]
-        )
+blocs = sorted(set(bloc_map.values()))
 
 # =====================================================
-# 9️⃣ Répartition
+# 7️⃣ DISPONIBILITÉS PAR BLOC
 # =====================================================
-if st.button("Lancer la répartition"):
-    affectations = {n: [] for n in noms}
-    compteur = {n: 0 for n in noms}
+bloc_dispos = {b: [] for b in blocs}
+for i, c in enumerate(creneaux):
+    for n in c["dispos"]:
+        bloc = bloc_map.get(n)
+        if bloc:
+            bloc_dispos[bloc].append(i)
 
-    # 🎯 Étape 1 : atteindre les MIN
-    for g in groupes:
-        key = tuple(g)
-        restant = occ_min[key]
+# =====================================================
+# 8️⃣ ÉTAT
+# =====================================================
+occ = {b: 0 for b in blocs}
+last_date = {b: None for b in blocs}
 
-        for c in creneaux:
-            if restant <= 0:
+# =====================================================
+# 9️⃣ TRI PAR URGENCE
+# =====================================================
+def urgence(bloc):
+    dispos = len(bloc_dispos[bloc])
+    if dispos == 0:
+        return 999
+    return (min_occ - occ[bloc]) / dispos
+
+# =====================================================
+# 🔟 PLACEMENT POUR ATTEINDRE LE MIN
+# =====================================================
+for bloc in sorted(blocs, key=urgence):
+    while occ[bloc] < min_occ:
+        placed = False
+        for i in bloc_dispos[bloc]:
+            c = creneaux[i]
+            if occ[bloc] >= min_occ:
                 break
-
-            if len(c["affectes"]) + len(g) > max_par_date:
+            if len(c["affectes"]) >= max_par_creneau:
                 continue
-            if not groupe_dispo(g, c["dispos"]):
+            if bloc in c["affectes"]:
                 continue
-            if any(m in c["affectes"] for m in g):
-                continue
-            if any(compteur[m] >= occ_max[key] for m in g):
-                continue
+            if last_date[bloc]:
+                if (c["dt"] - last_date[bloc]).days < delai_min:
+                    continue
+            c["affectes"].append(bloc)
+            occ[bloc] += 1
+            last_date[bloc] = c["dt"]
+            placed = True
+        if not placed:
+            break
 
-            if any(
-                affectations[m]
-                and (c["dt"] - affectations[m][-1]).days < delai_min
-                for m in g
-            ):
-                continue
-
-            for m in g:
-                c["affectes"].append(m)
-                compteur[m] += 1
-                affectations[m].append(c["dt"])
-
-            restant -= 1
-
-    # 🔁 Étape 2 : compléter les créneaux
-    for c in creneaux:
-        while len(c["affectes"]) < min_par_date:
-            candidats = [
-                g for g in groupes
-                if len(c["affectes"]) + len(g) <= max_par_date
-                and groupe_dispo(g, c["dispos"])
-                and not any(m in c["affectes"] for m in g)
-                and not any(compteur[m] >= occ_max[tuple(g)] for m in g)
-            ]
-
-            if not candidats:
-                break
-
-            g = random.choice(candidats)
-            for m in g:
-                c["affectes"].append(m)
-                compteur[m] += 1
-                affectations[m].append(c["dt"])
-
-    # =====================================================
-    # 🔟 Résultat
-    # =====================================================
-    st.subheader("Répartition finale")
-    for c in creneaux:
-        st.write(
-            f"{c['cle']} → "
-            f"{', '.join(c['affectes']) if c['affectes'] else 'Aucun'} "
-            f"({max_par_date - len(c['affectes'])} place(s))"
+# =====================================================
+# 1️⃣1️⃣ REMPLISSAGE VERS LE MAX
+# =====================================================
+for c in creneaux:
+    while len(c["affectes"]) < min_par_creneau:
+        candidats = sorted(
+            [b for b in blocs if b in bloc_dispos and creneaux.index(c) in bloc_dispos[b] and occ[b] < max_occ],
+            key=lambda b: occ[b]
         )
+        if not candidats:
+            break
+        b = candidats[0]
+        c["affectes"].append(b)
+        occ[b] += 1
+        last_date[b] = c["dt"]
 
-    st.subheader("Compteur final")
-    st.write(compteur)
+# =====================================================
+# 1️⃣2️⃣ AFFICHAGE
+# =====================================================
+st.subheader("Planning final")
+
+for c in creneaux:
+    noms = []
+    for b in c["affectes"]:
+        noms.extend(b.split("+"))
+    st.write(f"{c['cle']} → {', '.join(noms)} ({max_par_creneau - len(c['affectes'])} place(s))")
+
+# =====================================================
+# 1️⃣3️⃣ STATS
+# =====================================================
+st.subheader("Occurrences")
+for b in blocs:
+    st.write(f"{b} : {occ[b]}")
