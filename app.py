@@ -71,16 +71,16 @@ if uploaded_file:
     # 4️⃣ OCCURRENCES MAXIMALES GLOBALES
     # =====================================================
     total_creaneaux = len(df)
-    if noms_uniques:
-        places_totales = total_creaneaux * max_par_date
-        occ_recommandee = round(places_totales / len(noms_uniques))
-        st.info(f"Total créneaux : {total_creaneaux}, Places totales : {places_totales} → Occurrence idéale par enfant ≈ {occ_recommandee}")
-        max_occ_global = st.number_input(
-            "Nombre maximal d'occurrences par enfant (pour tous)",
-            min_value=1,
-            max_value=total_creaneaux,
-            value=occ_recommandee
-        )
+    places_totales = total_creaneaux * max_par_date
+    occ_recommandee = round(places_totales / len(noms_uniques))
+    st.info(f"Total créneaux : {total_creaneaux}, Places totales : {places_totales} → Occurrence idéale par enfant ≈ {occ_recommandee}")
+
+    max_occ_global = st.number_input(
+        "Nombre maximal d'occurrences par enfant (pour tous)",
+        min_value=1,
+        max_value=total_creaneaux,
+        value=occ_recommandee
+    )
 
     # =====================================================
     # 5️⃣ BINÔMES (INTERFACE)
@@ -120,8 +120,8 @@ if uploaded_file:
         deja_affectes_par_date = {}
 
         for _, row in df.iterrows():
-            date = str(row["Date"]).strip()
-            horaire = str(row["Horaires"]).strip()
+            date = str(row["Date"]).strip() or "1900-01-01"
+            horaire = str(row["Horaires"]).strip() or "00:00"
             dispos = [n.strip() for n in str(row["Noms_dispos"]).split(";") if n.strip()]
 
             cle = f"{date} | {horaire}"
@@ -169,12 +169,14 @@ if uploaded_file:
                         break
 
         # =====================================================
-        # 7️⃣ TRI PAR DATE + HORAIRE
+        # 7️⃣ TRI PAR DATE + HORAIRE (robuste)
         # =====================================================
         def cle_tri(cle_str):
-            date_str, horaire_str = cle_str.split("|")
-            date_str = date_str.strip()
-            horaire_str = horaire_str.strip()
+            parts = cle_str.split("|")
+            if len(parts) != 2:
+                date_str, horaire_str = "1900-01-01", "00:00"
+            else:
+                date_str, horaire_str = parts[0].strip(), parts[1].strip()
             try:
                 return (pd.to_datetime(date_str, dayfirst=True), horaire_str)
             except:
