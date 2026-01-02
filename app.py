@@ -169,26 +169,32 @@ if uploaded_file:
                         break
 
         # =====================================================
-        # 7️⃣ TRI PAR DATE + HORAIRE (robuste)
+        # 7️⃣ TRI PAR DATE + HORAIRE (robuste et chronologique)
         # =====================================================
         def cle_tri(cle_str):
-            cle_str = str(cle_str)  # ⚡ Force string
+            cle_str = str(cle_str)  # force string
             parts = cle_str.split("|")
             if len(parts) != 2:
                 date_str, horaire_str = "1900-01-01", "00:00"
             else:
                 date_str, horaire_str = parts[0].strip(), parts[1].strip()
             try:
-                return (pd.to_datetime(date_str, dayfirst=True), horaire_str)
+                date_dt = pd.to_datetime(date_str, dayfirst=True)
             except:
-                return (date_str, horaire_str)
+                date_dt = pd.to_datetime("1900-01-01")
+            try:
+                # horaire en objet datetime.time pour tri correct
+                heure_dt = pd.to_datetime(horaire_str, format="%H:%M").time()
+            except:
+                heure_dt = pd.to_datetime("00:00", format="%H:%M").time()
+            return (date_dt, heure_dt)
 
         repartition_tri = dict(sorted(repartition.items(), key=cle_tri))
 
         # =====================================================
         # 8️⃣ AFFICHAGE
         # =====================================================
-        st.subheader("Répartition finale (triée par date)")
+        st.subheader("Répartition finale (triée par date et horaire)")
         for cle, enfants in repartition_tri.items():
             st.write(
                 f"{cle} : "
