@@ -3,15 +3,12 @@ import pandas as pd
 import random
 import matplotlib.pyplot as plt
 
-st.title("Répartition optimisée des bénévoles/enfants (tous mois)")
+st.title("Répartition optimisée (janvier, février, mars)")
 
 # =====================================================
 # 1️⃣ IMPORT DU CSV
 # =====================================================
-uploaded_file = st.file_uploader(
-    "Importer le CSV (Date ; Horaires ; Noms_dispos)",
-    type=["csv"]
-)
+uploaded_file = st.file_uploader("Importer le CSV (Date ; Horaires ; Noms_dispos)", type=["csv"])
 
 if uploaded_file:
     try:
@@ -21,7 +18,6 @@ if uploaded_file:
         st.stop()
 
     df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
-
     if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
         st.error(f"Colonnes manquantes. Attendu : Date, Horaires, Noms_dispos. Trouvé : {df.columns.tolist()}")
         st.stop()
@@ -34,15 +30,7 @@ if uploaded_file:
     # =====================================================
     sample_cell = str(df["Noms_dispos"].iloc[0]) if len(df) > 0 else ""
     separator = "," if "," in sample_cell else ";"
-
-    noms_uniques = sorted({
-        n.strip()
-        for cell in df["Noms_dispos"]
-        if pd.notna(cell)
-        for n in str(cell).split(separator)
-        if n.strip()
-    })
-
+    noms_uniques = sorted({n.strip() for cell in df["Noms_dispos"] if pd.notna(cell) for n in str(cell).split(separator) if n.strip()})
     st.subheader("Enfants détectés")
     st.write(noms_uniques)
     st.info(f"Séparateur détecté : '{separator}'")
@@ -65,36 +53,29 @@ if uploaded_file:
     st.subheader("Binômes à ne pas séparer")
     if "binomes" not in st.session_state:
         st.session_state.binomes = []
-
     col1, col2 = st.columns(2)
     with col1:
         enfant_a = st.selectbox("Enfant A", noms_uniques, key="a")
     with col2:
         enfant_b = st.selectbox("Enfant B", noms_uniques, key="b")
-
-    if (enfant_a != enfant_b and
-        st.button("Ajouter binôme") and
+    if (enfant_a != enfant_b and st.button("Ajouter binôme") and
         (enfant_a, enfant_b) not in st.session_state.binomes and
         (enfant_b, enfant_a) not in st.session_state.binomes):
         st.session_state.binomes.append((enfant_a, enfant_b))
-
     if st.session_state.binomes:
         st.write("Binômes définis :")
         for a, b in st.session_state.binomes:
             st.write(f"- {a} + {b}")
 
     # =====================================================
-    # 5️⃣ ALGORITHME DE RÉPARTITION OPTIMISÉ POUR TOUS LES MOIS
+    # 5️⃣ ALGORITHME DE RÉPARTITION (TOUS MOIS)
     # =====================================================
     if st.button("Lancer la répartition optimisée"):
-        # Initialisation
         compteur = {nom: 0 for nom in noms_uniques}
         affectations = {nom: [] for nom in noms_uniques}
 
-        # Parsing des dates (pour janvier, février, mars)
-        mois_fr = {
-            'janvier': 1, 'février': 2, 'mars': 3
-        }
+        # Parsing des dates (janvier, février, mars)
+        mois_fr = {'janvier':1, 'février':2, 'mars':3}
 
         def parse_dt(row):
             try:
@@ -103,44 +84,45 @@ if uploaded_file:
                 parts = date_str.split()
                 jour = int(parts[1])
                 mois = mois_fr[parts[2]]  # Ex: "mercredi 7 janvier" → mois = 1
-                annee = 2026  # Année arbitraire
+                annee = 2026
                 heure = int(horaire_str.split('h')[0]) if 'h' in horaire_str else 0
                 return pd.Timestamp(year=annee, month=mois, day=jour, hour=heure)
             except Exception as e:
-                st.warning(f"Erreur de parsing pour {date_str} : {e}")
+                st.warning(f"Erreur de parsing pour '{date_str}' : {e}")
                 return pd.to_datetime("1900-01-01")
 
+        # Appliquer le parsing et afficher les dates pour vérification
         df['dt'] = df.apply(parse_dt, axis=1)
-        df_sorted = df.sort_values("dt")  # Tri par date
-        mid_date = df_sorted['dt'].quantile(0.5)  # Date médiane pour tous les mois
+        df_sorted = df.sort_values("dt")
+
+        # Afficher les dates parsées pour vérification
+        st.subheader("Dates parsées (vérification)")
+        for _, row in df_sorted.iterrows():
+            st.write(f"{row['Date']} | {row['Horaires']} → {row['dt'].strftime('%d/%m/%Y %H:%M')}")
+
+        mid_date = df_sorted['dt'].quantile(0.5)
         max_early_occurrences = max_occ_global // 2
 
         # Préparation des créneaux
         creneaux_info = []
         for _, row in df_sorted.iterrows():
-            date = str(row["Date"]).strip()
-            horaire = str(row["Horaires"]).strip()
             dispos = [n.strip() for n in str(row["Noms_dispos"]).split(separator) if n.strip() in noms_uniques]
             creneaux_info.append({
-                'cle': f"{date} | {horaire}",
+                'cle': f"{row['Date']} | {row['Horaires']}",
                 'dt': row['dt'],
                 'dispos': dispos,
                 'affectes': []
             })
 
-        # Algorithme par vagues avec rééquilibrage
+        # Algorithme d'affectation
         for _ in range(50):
             for creneau in creneaux_info:
                 if len(creneau['affectes']) >= max_par_date:
                     continue
-
-                # Limiter les affectations avant la mi-parcours
                 if creneau['dt'] < mid_date:
                     for nom in creneau['dispos'][:]:
                         if compteur[nom] >= max_early_occurrences:
                             creneau['dispos'].remove(nom)
-
-                # Affectation des binômes
                 for a, b in st.session_state.binomes:
                     if (a in creneau['dispos'] and b in creneau['dispos'] and
                         a not in creneau['affectes'] and b not in creneau['affectes'] and
@@ -153,12 +135,7 @@ if uploaded_file:
                             compteur[b] += 1
                             affectations[a].append(creneau['dt'])
                             affectations[b].append(creneau['dt'])
-
-                # Affectation solo (priorité aux moins affectés)
-                candidats = sorted(
-                    [n for n in creneau['dispos'] if n not in creneau['affectes'] and compteur[n] < max_occ_global],
-                    key=lambda x: compteur[x]
-                )
+                candidats = sorted([n for n in creneau['dispos'] if n not in creneau['affectes'] and compteur[n] < max_occ_global], key=lambda x: compteur[x])
                 for nom in candidats:
                     if len(creneau['affectes']) >= max_par_date:
                         break
@@ -177,46 +154,37 @@ if uploaded_file:
                         break
                     creneau['affectes'].append(nom)
                     compteur[nom] += 1
-                    st.warning(f"{nom} affecté·e à {creneau['cle']} pour équilibrer la répartition")
+                    st.warning(f"{nom} affecté·e à {creneau['cle']} pour équilibrer")
 
         # =====================================================
         # 6️⃣ AFFICHAGE DES RÉSULTATS
         # =====================================================
         st.subheader("Répartition optimisée (tous mois)")
         for creneau in sorted(creneaux_info, key=lambda x: x['dt']):
-            st.write(f"{creneau['cle']} : {', '.join(creneau['affectes']) if creneau['affectes'] else 'Aucun'} ({max_par_date - len(creneau['affectes'])} place(s) restante(s))")
+            st.write(f"{creneau['cle']} → {creneau['dt'].strftime('%d/%m')}: {', '.join(creneau['affectes']) if creneau['affectes'] else 'Aucun'} ({max_par_date - len(creneau['affectes'])} place(s))")
 
-        # Statistiques
+        # Statistiques et export (identique à avant)
         st.subheader("Statistiques")
         moyenne = sum(compteur.values()) / len(compteur)
         st.write(f"Moyenne d'affectations/enfant : {moyenne:.1f}")
         sous_representes = [n for n, c in compteur.items() if c < moyenne - 1]
         sur_representes = [n for n, c in compteur.items() if c > moyenne + 1]
         if sous_representes:
-            st.warning(f"Enfants sous-représentés : {', '.join(sous_representes)}")
+            st.warning(f"Sous-représentés : {', '.join(sous_representes)}")
         if sur_representes:
-            st.warning(f"Enfants sur-représentés : {', '.join(sur_representes)}")
+            st.warning(f"Sur-représentés : {', '.join(sur_representes)}")
 
-        # Visualisation
         fig, ax = plt.subplots()
         ax.bar(compteur.keys(), compteur.values())
         ax.axhline(y=moyenne, color='r', linestyle='--', label=f"Moyenne ({moyenne:.1f})")
         ax.set_xticklabels(compteur.keys(), rotation=90)
-        ax.set_ylabel("Nombre d'affectations")
         ax.legend()
         st.pyplot(fig)
 
-        # Export CSV
         export_df = pd.DataFrame([{
             "Date_Horaire": c['cle'],
             "Enfants_affectés": ", ".join(c['affectes']),
             "Places_restantes": max_par_date - len(c['affectes'])
         } for c in creneaux_info])
-
         csv = export_df.to_csv(index=False, sep=";").encode("utf-8")
-        st.download_button(
-            "Télécharger la répartition CSV",
-            data=csv,
-            file_name="repartition_tous_mois.csv",
-            mime="text/csv"
-        )
+        st.download_button("Télécharger CSV", data=csv, file_name="repartition_tous_mois.csv", mime="text/csv")
