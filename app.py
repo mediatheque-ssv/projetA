@@ -44,6 +44,8 @@ if uploaded_file:
     # 3️⃣ Paramètres simplifiés
     # =====================================================
     st.subheader("Paramètres")
+    min_par_date = st.slider("Nombre minimal d'enfants par créneau", 1, 10, 2)
+    max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_par_date, 10, 5)
     delai_minimum = st.slider("Délai minimum entre deux présences (jours)", 1, 14, 7)
 
     # =====================================================
@@ -118,9 +120,10 @@ if uploaded_file:
         for nom in enfants_trie:
             # Affecter au maximum de créneaux disponibles
             for creneau in creneaux_info:
+                if len(creneau['affectes']) >= max_par_date:
+                    continue
                 if nom not in creneau['dispos'] or nom in creneau['affectes']:
                     continue
-                # Respect du délai minimum
                 last = affectations[nom][-1] if affectations[nom] else pd.Timestamp("1900-01-01")
                 if (creneau['dt'] - last).days < delai_minimum:
                     continue
@@ -145,7 +148,19 @@ if uploaded_file:
                         affectations[a].append(creneau['dt'])
 
         # =====================================================
-        # 7️⃣ Affichage final
+        # 7️⃣ Vérifier le nombre minimal par créneau
+        # =====================================================
+        for creneau in creneaux_info:
+            while len(creneau['affectes']) < min_par_date:
+                candidats = [n for n in creneau['dispos'] if n not in creneau['affectes']]
+                if not candidats:
+                    break
+                nom = random.choice(candidats)
+                creneau['affectes'].append(nom)
+                compteur[nom] += 1
+
+        # =====================================================
+        # 8️⃣ Affichage final
         # =====================================================
         st.subheader("Répartition finale")
         for c in sorted(creneaux_info, key=lambda x: x['dt']):
