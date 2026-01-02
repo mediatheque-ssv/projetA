@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import timedelta
 
 st.set_page_config(layout="wide")
-st.title("Répartition finale optimisée et robuste")
+st.title("Répartition finale optimisée avec rattrapage")
 
 # =====================================================
 # 1️⃣ IMPORT CSV
@@ -19,7 +19,6 @@ df.columns = [c.strip() for c in df.columns]
 # 2️⃣ PARAMÈTRES UTILISATEUR
 # =====================================================
 st.subheader("Paramètres de répartition")
-
 col1, col2, col3 = st.columns(3)
 with col1:
     min_par_creneau = st.number_input("Min enfants par créneau", 1, 10, 4)
@@ -163,10 +162,11 @@ for c in creneaux:
                    and occ[b]<max_occ
                    and sum(bloc_size[x] for x in c["affectes"])+bloc_size[b]<=max_par_creneau]
         if not candidats:
-            # rattrapage : assouplir contraintes
+            # rattrapage final : assouplir contraintes
             candidats=[b for b in blocs if b not in c["affectes"]]
             if not candidats:
                 break
+        # prioriser blocs les moins présents
         candidats.sort(key=lambda b: occ[b])
         choisi=candidats[0]
         c["affectes"].append(choisi)
@@ -189,6 +189,21 @@ for c in creneaux:
 # =====================================================
 # 1️⃣2️⃣ STATISTIQUES
 # =====================================================
-st.subheader("Occurrences finales par bloc")
+st.subheader("Occurrences finales par enfant")
+occ_final = {}
 for b in blocs:
-    st.write(f"{b} : {occ[b]}")
+    for n in b.split("+"):
+        occ_final[n]=occ[b] if b in occ else 0
+st.write(pd.DataFrame.from_dict(occ_final, orient="index", columns=["Occurrences CSV"]))
+
+# =====================================================
+# 1️⃣3️⃣ OCC MAX DISPONIBLE
+# =====================================================
+st.subheader("Occurrences max disponibles selon le CSV")
+max_dispo = {n:0 for n in all_names}
+for _, c in df.iterrows():
+    for n in str(c["Noms_dispos"]).replace(",", ";").split(";"):
+        n=n.strip()
+        if n in max_dispo:
+            max_dispo[n]+=1
+st.write(pd.DataFrame.from_dict(max_dispo, orient="index", columns=["Max dispo"]))
