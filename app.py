@@ -40,7 +40,7 @@ if uploaded_file:
         n.strip()
         for cell in df["Noms_dispos"]
         if pd.notna(cell)
-        for n in str(cell).split(";")
+        for n in str(cell).split(";")  # Point-virgule comme avant
         if n.strip()
     })
 
@@ -183,6 +183,7 @@ if uploaded_file:
                         a in dispos and b in dispos
                         and a not in creneau['affectes']
                         and b not in creneau['affectes']
+                        and a in compteur and b in compteur  # Vérification ajoutée
                         and compteur[a] < max_occ_global
                         and compteur[b] < max_occ_global
                     ):
