@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import random
-from datetime import timedelta
 
 st.title("Répartition égalitaire bénévoles / enfants (étalée)")
 
@@ -56,16 +55,8 @@ if uploaded_file:
     # 3️⃣ PARAMÈTRES DES CRÉNEAUX
     # =====================================================
     st.subheader("Paramètres des créneaux")
-
-    min_par_date = st.slider(
-        "Nombre minimal d'enfants par créneau",
-        min_value=1, max_value=10, value=4
-    )
-
-    max_par_date = st.slider(
-        "Nombre maximal d'enfants par créneau",
-        min_value=min_par_date, max_value=10, value=max(5, min_par_date)
-    )
+    min_par_date = st.slider("Nombre minimal d'enfants par créneau", min_value=1, max_value=10, value=4)
+    max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_value=min_par_date, max_value=10, value=max(5, min_par_date))
 
     # =====================================================
     # 4️⃣ OCCURRENCES MAXIMALES GLOBALES
@@ -83,7 +74,7 @@ if uploaded_file:
     )
 
     # =====================================================
-    # 5️⃣ BINÔMES (INTERFACE)
+    # 5️⃣ BINÔMES
     # =====================================================
     st.subheader("Binômes à ne pas séparer")
     if "binomes" not in st.session_state:
@@ -111,25 +102,23 @@ if uploaded_file:
     binomes = st.session_state.binomes
 
     # =====================================================
-    # 6️⃣ RÉPARTITION ÉGALITAIRE AVEC ESPACEMENT ET MIN PAR CRÉNEAU
+    # 6️⃣ RÉPARTITION ÉGALITAIRE AVEC ESPACEMENT
     # =====================================================
     if st.button("Répartir les enfants"):
 
         repartition = {}
         compteur = {nom: 0 for nom in noms_uniques}
-        deja_affectes_par_date = {}
         affectations = {nom: [] for nom in noms_uniques}  # stocke les datetimes
 
-        DELAI_PREFERENTIEL = 14  # jours
-        DELAI_MINIMUM = 7        # jours
+        DELAI_PREFERENTIEL = 14
+        DELAI_MINIMUM = 7
 
-        # trier les lignes CSV par date + horaire
+        # Trier CSV par datetime
         def parse_dt(row):
             try:
                 return pd.to_datetime(f"{row['Date']} {row['Horaires']}", dayfirst=True)
             except:
                 return pd.to_datetime("1900-01-01 00:00")
-
         df_sorted = df.copy()
         df_sorted['dt'] = df_sorted.apply(parse_dt, axis=1)
         df_sorted = df_sorted.sort_values("dt")
@@ -141,7 +130,6 @@ if uploaded_file:
 
             cle = f"{date} | {horaire}"
             repartition[cle] = []
-            deja_affectes_par_date[cle] = set()
 
             date_horaire_dt = pd.to_datetime(f"{date} {horaire}", dayfirst=True, errors="coerce")
             if pd.isna(date_horaire_dt):
@@ -167,14 +155,13 @@ if uploaded_file:
                 repartition[cle].extend([a, b])
                 compteur[a] += 1
                 compteur[b] += 1
-                deja_affectes_par_date[cle].update([a, b])
                 affectations[a].append(date_horaire_dt)
                 affectations[b].append(date_horaire_dt)
 
-            # ---- SOLO, triés par : plus grand espacement puis moins de créneaux
+            # ---- SOLO
             score_solos = []
             for n in dispos:
-                if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global:
+                if n not in repartition[cle] and compteur[n] < max_occ_global:
                     last_dates = affectations[n]
                     distance = min([(date_horaire_dt - d).days for d in last_dates] + [float('inf')])
                     score_solos.append((n, distance, compteur[n]))
@@ -184,34 +171,28 @@ if uploaded_file:
                 if len(repartition[cle]) < max_par_date:
                     repartition[cle].append(nom)
                     compteur[nom] += 1
-                    deja_affectes_par_date[cle].add(nom)
                     affectations[nom].append(date_horaire_dt)
 
-            # ---- Compléter pour atteindre min_par_date si nécessaire
-            restants = [n for n in noms_uniques if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global]
+            # ---- Compléter pour atteindre min_par_date
+            restants = [n for n in noms_uniques if n not in repartition[cle] and compteur[n] < max_occ_global]
             random.shuffle(restants)
             for n in restants:
                 if len(repartition[cle]) < min_par_date:
                     repartition[cle].append(n)
                     compteur[n] += 1
-                    deja_affectes_par_date[cle].add(n)
                     affectations[n].append(date_horaire_dt)
                 else:
                     break
 
         # =====================================================
-        # 7️⃣ TRI PAR DATE + HORAIRE (robuste)
+        # 7️⃣ TRI GARANTI PAR DATE/HORAIRE
         # =====================================================
         def cle_tri(cle):
-            cle_str = str(cle)
-            parts = cle_str.split("|", 1)
+            parts = str(cle).split("|", 1)
             date_str = parts[0].strip() if len(parts) > 0 else "1900-01-01"
             horaire_str = parts[1].strip() if len(parts) > 1 else "00:00"
-            try:
-                date_dt = pd.to_datetime(date_str, dayfirst=True, errors="coerce")
-                if pd.isna(date_dt):
-                    date_dt = pd.to_datetime("1900-01-01")
-            except:
+            date_dt = pd.to_datetime(date_str, dayfirst=True, errors="coerce")
+            if pd.isna(date_dt):
                 date_dt = pd.to_datetime("1900-01-01")
             try:
                 heure_dt = pd.to_datetime(horaire_str, format="%H:%M", errors="coerce").time()
@@ -219,16 +200,15 @@ if uploaded_file:
                 heure_dt = pd.to_datetime("00:00", format="%H:%M").time()
             return (date_dt, heure_dt)
 
-        repartition_tri = dict(sorted(repartition.items(), key=cle_tri))
+        repartition_tri_list = sorted(repartition.items(), key=cle_tri)
 
         # =====================================================
         # 8️⃣ AFFICHAGE
         # =====================================================
         st.subheader("Répartition finale (triée par date et horaire)")
-        for cle, enfants in repartition_tri.items():
+        for cle, enfants in repartition_tri_list:
             st.write(
-                f"{cle} : "
-                f"{', '.join(enfants) if enfants else 'Aucun'} "
+                f"{cle} : {', '.join(enfants) if enfants else 'Aucun'} "
                 f"({max_par_date - len(enfants)} place(s) restante(s))"
             )
 
@@ -249,7 +229,7 @@ if uploaded_file:
                 "Enfants_affectés": ";".join(enfants),
                 "Places_restantes": max_par_date - len(enfants)
             }
-            for cle, enfants in repartition_tri.items()
+            for cle, enfants in repartition_tri_list
         ])
 
         csv = export_df.to_csv(index=False, sep=";").encode("utf-8")
