@@ -132,12 +132,15 @@ if uploaded_file:
             cle = f"{date} | {horaire}"
             repartition[cle] = []
             deja_affectes_par_date[cle] = set()
-            date_horaire_dt = pd.to_datetime(f"{date} {horaire}", dayfirst=True)
+
+            # conversion robuste
+            date_horaire_dt = pd.to_datetime(f"{date} {horaire}", dayfirst=True, errors="coerce")
+            if pd.isna(date_horaire_dt):
+                date_horaire_dt = pd.to_datetime("1900-01-01 00:00")
 
             # ---- BINÔMES
             binomes_dispos = []
             for a, b in binomes:
-                # vérifier disponibilité et max_occ
                 if (
                     a in dispos and b in dispos
                     and compteur[a] < max_occ_global
@@ -193,18 +196,19 @@ if uploaded_file:
         # 7️⃣ TRI PAR DATE + HORAIRE
         # =====================================================
         def cle_tri(cle_str):
-            cle_str = str(cle_str)
             parts = cle_str.split("|")
             if len(parts) != 2:
                 date_str, horaire_str = "1900-01-01", "00:00"
             else:
                 date_str, horaire_str = parts[0].strip(), parts[1].strip()
             try:
-                date_dt = pd.to_datetime(date_str, dayfirst=True)
+                date_dt = pd.to_datetime(date_str, dayfirst=True, errors="coerce")
+                if pd.isna(date_dt):
+                    date_dt = pd.to_datetime("1900-01-01")
             except:
                 date_dt = pd.to_datetime("1900-01-01")
             try:
-                heure_dt = pd.to_datetime(horaire_str, format="%H:%M").time()
+                heure_dt = pd.to_datetime(horaire_str, format="%H:%M", errors="coerce").time()
             except:
                 heure_dt = pd.to_datetime("00:00", format="%H:%M").time()
             return (date_dt, heure_dt)
