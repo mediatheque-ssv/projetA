@@ -178,7 +178,7 @@ if uploaded_file:
                     affectations[a].append(date_horaire_dt)
                     affectations[b].append(date_horaire_dt)
 
-            # ---- SOLO avec meilleur scoring
+            # ---- SOLO avec meilleur scoring et randomisation
             candidats_solo = []
             for n in dispos:
                 if n not in repartition[cle] and compteur[n] < max_occ_global:
@@ -186,11 +186,13 @@ if uploaded_file:
                     distance = min([(date_horaire_dt - d).days for d in last_dates] + [float('inf')])
                     
                     if distance >= DELAI_MINIMUM:
-                        # Score : priorité aux moins affectés, puis espacement
-                        score = (compteur[n] * 1000) - distance
+                        # Score : priorité aux moins affectés, avec un peu d'aléa
+                        random_factor = random.uniform(-50, 50)
+                        score = (compteur[n] * 1000) - distance + random_factor
                         candidats_solo.append((n, score))
             
-            candidats_solo.sort(key=lambda x: x[1])
+            # Trier par score, mais garder un peu d'aléa pour les ex-aequo
+            candidats_solo.sort(key=lambda x: (x[1], random.random()))
 
             for nom, _ in candidats_solo:
                 if len(repartition[cle]) < max_par_date:
