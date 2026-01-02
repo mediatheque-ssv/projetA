@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import random
 
-st.title("Répartition avec occurrence minimale par enfant")
+st.title("Répartition équilibrée des enfants / binômes")
 
 # =====================================================
 # 1️⃣ Import CSV
@@ -41,16 +41,18 @@ if uploaded_file:
     st.write(noms_uniques)
 
     # =====================================================
-    # 3️⃣ Paramètres simplifiés
+    # 3️⃣ Paramètres
     # =====================================================
-    st.subheader("Paramètres")
+    st.subheader("Paramètres généraux")
+    min_par_date = st.slider("Nombre minimal d'enfants par créneau", 1, 10, 2)
+    max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_par_date, 10, 5)
     delai_minimum = st.slider("Délai minimum entre deux présences (jours)", 1, 14, 7)
 
-    # Calcul des max dispo par enfant
-    disponibilites_totales = {nom: sum(nom in str(cell).split(separator) for cell in df["Noms_dispos"]) for nom in noms_uniques}
-
-    # Occurrence min par enfant
+    # =====================================================
+    # 4️⃣ Occurrence minimale par enfant
+    # =====================================================
     st.subheader("Occurrence minimale par enfant")
+    disponibilites_totales = {nom: sum(nom in str(cell).split(separator) for cell in df["Noms_dispos"]) for nom in noms_uniques}
     occur_min = {}
     col1, col2 = st.columns(2)
     for i, nom in enumerate(noms_uniques):
@@ -63,7 +65,7 @@ if uploaded_file:
             )
 
     # =====================================================
-    # 4️⃣ Gestion des binômes
+    # 5️⃣ Gestion des binômes
     # =====================================================
     st.subheader("Binômes à ne pas séparer")
     if "binomes" not in st.session_state:
@@ -87,7 +89,7 @@ if uploaded_file:
             st.write(f"- {a} + {b}")
 
     # =====================================================
-    # 5️⃣ Parsing dates
+    # 6️⃣ Parsing dates
     # =====================================================
     mois_fr = {'janvier':1, 'février':2, 'fevrier':2, 'mars':3}
 
@@ -121,13 +123,13 @@ if uploaded_file:
         })
 
     # =====================================================
-    # 6️⃣ Répartition minimale par enfant
+    # 7️⃣ Répartition
     # =====================================================
     if st.button("Lancer la répartition"):
         compteur = {nom: 0 for nom in noms_uniques}
         affectations = {nom: [] for nom in noms_uniques}
 
-        # Étape 1 : affecter chaque enfant au moins occurrence_min
+        # Étape 1 : remplir chaque enfant jusqu'à occurrence_min
         for nom in noms_uniques:
             places_restantes = occur_min[nom]
             for creneau in creneaux_info:
@@ -138,6 +140,8 @@ if uploaded_file:
                 last = affectations[nom][-1] if affectations[nom] else pd.Timestamp("1900-01-01")
                 if (creneau['dt'] - last).days < delai_minimum:
                     continue
+                if len(creneau['affectes']) >= max_par_date:
+                    continue
                 # Affecter l'enfant
                 creneau['affectes'].append(nom)
                 compteur[nom] += 1
@@ -146,16 +150,29 @@ if uploaded_file:
                 # Affecter le binôme si nécessaire
                 for a,b in st.session_state.binomes:
                     if a==nom and b in creneau['dispos'] and b not in creneau['affectes']:
-                        creneau['affectes'].append(b)
-                        compteur[b] += 1
-                        affectations[b].append(creneau['dt'])
+                        if len(creneau['affectes']) < max_par_date:
+                            creneau['affectes'].append(b)
+                            compteur[b] += 1
+                            affectations[b].append(creneau['dt'])
                     if b==nom and a in creneau['dispos'] and a not in creneau['affectes']:
-                        creneau['affectes'].append(a)
-                        compteur[a] += 1
-                        affectations[a].append(creneau['dt'])
+                        if len(creneau['affectes']) < max_par_date:
+                            creneau['affectes'].append(a)
+                            compteur[a] += 1
+                            affectations[a].append(creneau['dt'])
+
+        # Étape 2 : remplir les créneaux jusqu'au min_par_date
+        for creneau in creneaux_info:
+            while len(creneau['affectes']) < min_par_date:
+                candidats = [n for n in creneau['dispos'] if n not in creneau['affectes']]
+                if not candidats:
+                    break
+                nom = random.choice(candidats)
+                creneau['affectes'].append(nom)
+                compteur[nom] += 1
+                affectations[nom].append(creneau['dt'])
 
         # =====================================================
-        # 7️⃣ Affichage final
+        # 8️⃣ Affichage final
         # =====================================================
         st.subheader("Répartition finale")
         for c in sorted(creneaux_info, key=lambda x: x['dt']):
