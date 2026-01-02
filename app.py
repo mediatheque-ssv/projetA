@@ -3,7 +3,7 @@ import pandas as pd
 import random
 import matplotlib.pyplot as plt
 
-st.title("Répartition optimisée des bénévoles/enfants (version équilibrée)")
+st.title("Répartition optimisée et équilibrée des bénévoles/enfants")
 
 # =====================================================
 # 1️⃣ IMPORT ET VÉRIFICATION DU CSV
@@ -56,7 +56,7 @@ if uploaded_file:
         max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_par_date, 10, 5)
     with col2:
         delai_minimum = st.slider("Délai minimum entre 2 créneaux (jours)", 1, 14, 7)
-        max_occ_global = st.number_input("Nombre maximal d'occurrences par enfant", 1, 20, 6)
+        max_occ_global = st.number_input("Nombre maximal d'occurrences par enfant", 1, 20, 8)  # Augmenté pour plus de flexibilité
 
     # =====================================================
     # 4️⃣ GESTION DES BINÔMES
@@ -99,12 +99,12 @@ if uploaded_file:
             parts = date_str.split()
             if len(parts) < 3:
                 st.warning(f"Format de date invalide : '{date_str}'")
-                return pd.to_datetime("1900-01-01")
+                return pd.Timestamp("1900-01-01")
             jour = int(parts[1])
             mois_nom = parts[2]
             if mois_nom not in mois_fr:
                 st.warning(f"Mois non reconnu : '{mois_nom}' (utilisez janvier/février/mars)")
-                return pd.to_datetime("1900-01-01")
+                return pd.Timestamp("1900-01-01")
             mois = mois_fr[mois_nom]
             annee = 2026
             heure = int(horaire_str.split('h')[0]) if 'h' in horaire_str else 0
@@ -160,7 +160,9 @@ if uploaded_file:
 
         # Date médiane pour équilibrer les affectations
         mid_date = df_sorted['dt'].quantile(0.5)
-        max_early_occurrences = max_occ_global // 2
+
+        # Liste des enfants sous-représentés (à prioriser)
+        enfants_sous_representes = ["Magali", "Léa", "Adrien", "Cléo", "Manuela", "Lise", "Séléna", "Théo", "Louise", "Adélie", "Jade"]
 
         # =====================================================
         # 7️⃣ ALGORITHME D'AFFECTATION (optimisé et équilibré)
@@ -169,12 +171,6 @@ if uploaded_file:
             for creneau in creneaux_info:
                 if len(creneau['affectes']) >= max_par_date:
                     continue
-
-                # Limiter les affectations avant la mi-parcours
-                if creneau['dt'] < mid_date:
-                    for nom in creneau['dispos'][:]:
-                        if compteur[nom] >= max_early_occurrences:
-                            creneau['dispos'].remove(nom)
 
                 # Affectation des binômes
                 for a, b in st.session_state.binomes:
@@ -194,8 +190,9 @@ if uploaded_file:
                 candidats = sorted(
                     [n for n in creneau['dispos'] if n not in creneau['affectes'] and compteur[n] < max_occ_global],
                     key=lambda x: (
-                        compteur[x] - objectif_moyen,  # Priorité aux enfants sous-représentés
-                        disponibilites_totales[x],       # Puis priorité aux enfants avec le moins de disponibilités
+                        0 if x in enfants_sous_representes else 1,  # Priorité absolue aux sous-représentés
+                        compteur[x] - objectif_moyen,  # Puis priorité aux enfants en dessous de l'objectif
+                        disponibilites_totales[x],       # Enfin, priorité aux enfants avec le moins de disponibilités
                     )
                 )
                 for nom in candidats:
@@ -204,8 +201,8 @@ if uploaded_file:
                     last = affectations[nom][-1] if affectations[nom] else pd.Timestamp("1900-01-01")
                     # Assouplir le délai minimum pour les enfants sous-représentés
                     delai_applique = delai_minimum
-                    if compteur[nom] < objectif_moyen - 1:
-                        delai_applique = max(1, delai_minimum - 2)
+                    if nom in enfants_sous_representes and compteur[nom] < objectif_moyen - 1:
+                        delai_applique = max(1, delai_minimum - 3)  # Réduire le délai minimum
                     if (creneau['dt'] - last).days >= delai_applique:
                         creneau['affectes'].append(nom)
                         compteur[nom] += 1
@@ -219,7 +216,8 @@ if uploaded_file:
                 candidats = sorted(
                     [n for n in creneau['dispos'] if n not in creneau['affectes']],
                     key=lambda x: (
-                        compteur[x] - objectif_moyen,  # Priorité aux enfants sous-représentés
+                        0 if x in enfants_sous_representes else 1,  # Priorité absolue aux sous-représentés
+                        compteur[x] - objectif_moyen,  # Puis priorité aux enfants en dessous de l'objectif
                         random.random()                 # Mélange aléatoire pour équité
                     )
                 )
