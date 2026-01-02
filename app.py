@@ -36,19 +36,24 @@ if uploaded_file:
     # =====================================================
     # 2️⃣ EXTRACTION DES NOMS
     # =====================================================
+    # Détection automatique du séparateur (virgule ou point-virgule)
+    sample_cell = str(df["Noms_dispos"].iloc[0]) if len(df) > 0 else ""
+    separator = "," if "," in sample_cell else ";"
+    
     noms_uniques = sorted({
         n.strip()
         for cell in df["Noms_dispos"]
         if pd.notna(cell)
-        for n in str(cell).split(";")  # Point-virgule comme avant
+        for n in str(cell).split(separator)
         if n.strip()
     })
 
     st.subheader("Enfants détectés")
     if noms_uniques:
         st.write(noms_uniques)
+        st.info(f"Séparateur détecté : '{separator}'")
     else:
-        st.warning("Aucun enfant détecté ! Vérifie le CSV et le séparateur ';'")
+        st.warning("Aucun enfant détecté ! Vérifie le CSV")
         st.stop()
 
     # =====================================================
@@ -106,13 +111,12 @@ if uploaded_file:
     # =====================================================
     if st.button("Répartir les enfants"):
 
-        repartition = {}
+        # Initialisation
         compteur = {nom: 0 for nom in noms_uniques}
         affectations = {nom: [] for nom in noms_uniques}
-
         DELAI_MINIMUM = 7
 
-        # Trier CSV par datetime (gérer mois en français)
+        # Parser les dates
         mois_fr = {
             'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
             'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
@@ -124,31 +128,33 @@ if uploaded_file:
                 date_str = str(row['Date']).strip().lower()
                 horaire_str = str(row['Horaires']).strip()
                 
-                # Extraire jour et mois depuis "mercredi 7 janvier"
                 parts = date_str.split()
                 jour = int(parts[1]) if len(parts) > 1 else 1
                 mois_nom = parts[2] if len(parts) > 2 else 'janvier'
                 mois = mois_fr.get(mois_nom, 1)
                 
-                # Convertir "10h" en "10:00"
                 horaire_str = horaire_str.replace('h', ':00') if 'h' in horaire_str else horaire_str
                 heure = int(horaire_str.split(':')[0]) if ':' in horaire_str else 0
                 minute = int(horaire_str.split(':')[1]) if ':' in horaire_str and len(horaire_str.split(':')) > 1 else 0
                 
                 return pd.Timestamp(year=2026, month=mois, day=jour, hour=heure, minute=minute)
-            except Exception as e:
+            except:
                 return pd.to_datetime("1900-01-01 00:00")
         
         df_sorted = df.copy()
         df_sorted['dt'] = df_sorted.apply(parse_dt, axis=1)
         df_sorted = df_sorted.sort_values("dt")
 
-        # Préparer la structure
+        # Préparer les créneaux
         creneaux_info = []
         for _, row in df_sorted.iterrows():
             date = str(row["Date"]).strip() or "1900-01-01"
             horaire = str(row["Horaires"]).strip() or "00:00"
-            dispos = [n.strip() for n in str(row["Noms_dispos"]).split(",") if n.strip()]
+            dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
+            dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
+            # Nettoyer et filtrer pour garder seulement les noms reconnus
+            dispos = [n for n in dispos if n in compteur]
+            
             cle = f"{date} | {horaire}"
             creneaux_info.append({
                 'cle': cle,
@@ -156,15 +162,14 @@ if uploaded_file:
                 'dispos': dispos,
                 'affectes': []
             })
-            repartition[cle] = []
 
         # Algorithme par vagues
         vague = 0
-        while True:
+        places_restantes_total = sum(max_par_date for _ in creneaux_info)
+        
+        while vague < 50:
             vague += 1
             affectations_vague = 0
-            
-            # Mélanger l'ordre des créneaux pour cette vague
             creneaux_shuffled = creneaux_info.copy()
             random.shuffle(creneaux_shuffled)
             
@@ -176,52 +181,39 @@ if uploaded_file:
                 date_horaire_dt = creneau['dt']
                 dispos = creneau['dispos']
                 
-                # ---- BINÔMES pour cette vague
-                binomes_candidats = []
+                # BINÔMES
                 for a, b in binomes:
                     if (
                         a in dispos and b in dispos
                         and a not in creneau['affectes']
                         and b not in creneau['affectes']
-                        and a in compteur and b in compteur  # Vérification ajoutée
                         and compteur[a] < max_occ_global
                         and compteur[b] < max_occ_global
+                        and len(creneau['affectes']) <= max_par_date - 2
                     ):
-                        # Vérifier espacement
                         min_a = min([(date_horaire_dt - d).days for d in affectations[a]] + [float('inf')])
                         min_b = min([(date_horaire_dt - d).days for d in affectations[b]] + [float('inf')])
                         if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
-                            binomes_candidats.append((a, b))
-                
-                random.shuffle(binomes_candidats)
-                
-                for a, b in binomes_candidats:
-                    if len(creneau['affectes']) <= max_par_date - 2:
-                        creneau['affectes'].extend([a, b])
-                        compteur[a] += 1
-                        compteur[b] += 1
-                        affectations[a].append(date_horaire_dt)
-                        affectations[b].append(date_horaire_dt)
-                        affectations_vague += 2
+                            creneau['affectes'].extend([a, b])
+                            compteur[a] += 1
+                            compteur[b] += 1
+                            affectations[a].append(date_horaire_dt)
+                            affectations[b].append(date_horaire_dt)
+                            affectations_vague += 2
 
-                # ---- SOLO pour cette vague
+                # SOLO
                 candidats_solo = []
                 for n in dispos:
                     if (
-                        n in compteur  # Vérification ajoutée
-                        and n not in creneau['affectes']
+                        n not in creneau['affectes']
                         and compteur[n] < max_occ_global
                     ):
-                        last_dates = affectations[n]
-                        distance = min([(date_horaire_dt - d).days for d in last_dates] + [float('inf')])
-                        
+                        distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                         if distance >= DELAI_MINIMUM:
                             candidats_solo.append(n)
                 
-                # Mélanger pour varier
                 random.shuffle(candidats_solo)
                 
-                # Remplir jusqu'au max
                 for nom in candidats_solo:
                     if len(creneau['affectes']) < max_par_date:
                         creneau['affectes'].append(nom)
@@ -229,65 +221,32 @@ if uploaded_file:
                         affectations[nom].append(date_horaire_dt)
                         affectations_vague += 1
             
-            # Si aucune affectation dans cette vague, on arrête
             if affectations_vague == 0:
                 break
-            
-            # Limite de sécurité
-            if vague > 50:
-                st.warning("Arrêt après 50 vagues (limite de sécurité)")
-                break
         
-        # Compléter les créneaux qui n'atteignent pas le minimum
+        # Compléter les créneaux sous le minimum
         for creneau in creneaux_info:
             if len(creneau['affectes']) < min_par_date:
-                cle = creneau['cle']
-                date_horaire_dt = creneau['dt']
-                dispos = creneau['dispos']
+                candidats = [(n, compteur[n]) for n in creneau['dispos']
+                           if n not in creneau['affectes'] and compteur[n] < max_occ_global]
+                candidats.sort(key=lambda x: x[1])
                 
-                # Prendre les moins affectés parmi les dispos
-                candidats_补充 = [
-                    (n, compteur[n]) for n in dispos
-                    if n in compteur and n not in creneau['affectes'] and compteur[n] < max_occ_global  # Vérification ajoutée
-                ]
-                candidats_补充.sort(key=lambda x: x[1])
-                
-                for nom, _ in candidats_补充:
+                for nom, _ in candidats:
                     if len(creneau['affectes']) < min_par_date:
                         creneau['affectes'].append(nom)
                         compteur[nom] += 1
-                        affectations[nom].append(date_horaire_dt)
-        
-        # Copier les résultats dans repartition
-        for creneau in creneaux_info:
-            repartition[creneau['cle']] = creneau['affectes']
+                        affectations[nom].append(creneau['dt'])
 
         # =====================================================
-        # 7️⃣ TRI GARANTI PAR DATE/HORAIRE
+        # 7️⃣ TRI ET AFFICHAGE
         # =====================================================
-        # On garde une map de la clé vers le datetime original
-        cle_vers_dt = {}
-        for _, row in df_sorted.iterrows():
-            date = str(row["Date"]).strip() or "1900-01-01"
-            horaire = str(row["Horaires"]).strip() or "00:00"
-            cle = f"{date} | {horaire}"
-            cle_vers_dt[cle] = row['dt']
-        
-        def cle_tri(item):
-            cle = item[0]
-            # Utiliser le datetime déjà parsé
-            dt = cle_vers_dt.get(cle, pd.to_datetime("1900-01-01 00:00"))
-            return dt
+        creneaux_info.sort(key=lambda x: x['dt'])
 
-        repartition_tri_list = sorted(repartition.items(), key=cle_tri)
-
-        # =====================================================
-        # 8️⃣ AFFICHAGE
-        # =====================================================
         st.subheader("Répartition finale (triée par date et horaire)")
-        for cle, enfants in repartition_tri_list:
+        for creneau in creneaux_info:
+            enfants = creneau['affectes']
             st.write(
-                f"{cle} : {', '.join(enfants) if enfants else 'Aucun'} "
+                f"{creneau['cle']} : {', '.join(enfants) if enfants else 'Aucun'} "
                 f"({max_par_date - len(enfants)} place(s) restante(s))"
             )
 
@@ -301,15 +260,15 @@ if uploaded_file:
             st.write(", ".join(jamais_affectes))
 
         # =====================================================
-        # 9️⃣ EXPORT CSV
+        # 8️⃣ EXPORT CSV
         # =====================================================
         export_df = pd.DataFrame([
             {
-                "Date_Horaire": cle,
-                "Enfants_affectés": ";".join(enfants),
-                "Places_restantes": max_par_date - len(enfants)
+                "Date_Horaire": creneau['cle'],
+                "Enfants_affectés": separator.join(creneau['affectes']),
+                "Places_restantes": max_par_date - len(creneau['affectes'])
             }
-            for cle, enfants in repartition_tri_list
+            for creneau in creneaux_info
         ])
 
         csv = export_df.to_csv(index=False, sep=";").encode("utf-8")
