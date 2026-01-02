@@ -36,7 +36,6 @@ if uploaded_file:
     # =====================================================
     # 2️⃣ EXTRACTION DES NOMS
     # =====================================================
-    # Détection automatique du séparateur (virgule ou point-virgule)
     sample_cell = str(df["Noms_dispos"].iloc[0]) if len(df) > 0 else ""
     separator = "," if "," in sample_cell else ";"
     
@@ -107,7 +106,7 @@ if uploaded_file:
     binomes = st.session_state.binomes
 
     # =====================================================
-    # 6️⃣ RÉPARTITION PAR VAGUES SUCCESSIVES
+    # 6️⃣ RÉPARTITION PAR PRIORITÉ AUX ENFANTS MOINS AFFECTÉS
     # =====================================================
     if st.button("Répartir les enfants"):
 
@@ -116,7 +115,7 @@ if uploaded_file:
         affectations = {nom: [] for nom in noms_uniques}
         DELAI_MINIMUM = 7
 
-        # Parser les dates
+        # Parsing des dates
         mois_fr = {
             'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
             'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
@@ -152,90 +151,57 @@ if uploaded_file:
             horaire = str(row["Horaires"]).strip() or "00:00"
             dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
             dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
-            # Nettoyer et filtrer pour garder seulement les noms reconnus
-            dispos = [n for n in dispos if n in compteur]
-            
+            dispos = [n for n in dispos if n in compteur]  # garder seulement les noms connus
             cle = f"{date} | {horaire}"
-            creneaux_info.append({
-                'cle': cle,
-                'dt': row['dt'],
-                'dispos': dispos,
-                'affectes': []
-            })
+            creneaux_info.append({'cle': cle, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
 
-        # Algorithme par vagues
-        vague = 0
-        places_restantes_total = sum(max_par_date for _ in creneaux_info)
-        
-        while vague < 50:
-            vague += 1
-            affectations_vague = 0
-            creneaux_shuffled = creneaux_info.copy()
-            random.shuffle(creneaux_shuffled)
-            
-            for creneau in creneaux_shuffled:
-                if len(creneau['affectes']) >= max_par_date:
-                    continue
-                
-                cle = creneau['cle']
-                date_horaire_dt = creneau['dt']
-                dispos = creneau['dispos']
-                
-                # BINÔMES
-                for a, b in binomes:
-                    if (
-                        a in dispos and b in dispos
-                        and a not in creneau['affectes']
-                        and b not in creneau['affectes']
-                        and compteur[a] < max_occ_global
-                        and compteur[b] < max_occ_global
-                        and len(creneau['affectes']) <= max_par_date - 2
-                    ):
-                        min_a = min([(date_horaire_dt - d).days for d in affectations[a]] + [float('inf')])
-                        min_b = min([(date_horaire_dt - d).days for d in affectations[b]] + [float('inf')])
-                        if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
-                            creneau['affectes'].extend([a, b])
-                            compteur[a] += 1
-                            compteur[b] += 1
-                            affectations[a].append(date_horaire_dt)
-                            affectations[b].append(date_horaire_dt)
-                            affectations_vague += 2
-
-                # SOLO
-                candidats_solo = []
-                for n in dispos:
-                    if (
-                        n not in creneau['affectes']
-                        and compteur[n] < max_occ_global
-                    ):
-                        distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
-                        if distance >= DELAI_MINIMUM:
-                            candidats_solo.append(n)
-                
-                random.shuffle(candidats_solo)
-                
-                for nom in candidats_solo:
-                    if len(creneau['affectes']) < max_par_date:
-                        creneau['affectes'].append(nom)
-                        compteur[nom] += 1
-                        affectations[nom].append(date_horaire_dt)
-                        affectations_vague += 1
-            
-            if affectations_vague == 0:
-                break
-        
-        # Compléter les créneaux sous le minimum
+        # Répartition prioritaire
         for creneau in creneaux_info:
-            if len(creneau['affectes']) < min_par_date:
-                candidats = [(n, compteur[n]) for n in creneau['dispos']
-                           if n not in creneau['affectes'] and compteur[n] < max_occ_global]
-                candidats.sort(key=lambda x: x[1])
-                
-                for nom, _ in candidats:
-                    if len(creneau['affectes']) < min_par_date:
+
+            # BINÔMES d'abord
+            for a, b in binomes:
+                if (
+                    a in creneau['dispos'] and b in creneau['dispos']
+                    and a not in creneau['affectes'] and b not in creneau['affectes']
+                    and compteur[a] < max_occ_global and compteur[b] < max_occ_global
+                    and len(creneau['affectes']) <= max_par_date - 2
+                ):
+                    min_a = min([(creneau['dt'] - d).days for d in affectations[a]] + [float('inf')])
+                    min_b = min([(creneau['dt'] - d).days for d in affectations[b]] + [float('inf')])
+                    if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
+                        creneau['affectes'].extend([a, b])
+                        compteur[a] += 1
+                        compteur[b] += 1
+                        affectations[a].append(creneau['dt'])
+                        affectations[b].append(creneau['dt'])
+
+            # SOLO : priorité enfants moins affectés
+            candidats_solo = [
+                n for n in creneau['dispos']
+                if n not in creneau['affectes'] and compteur[n] < max_occ_global
+            ]
+            candidats_solo = sorted(candidats_solo, key=lambda n: compteur[n])  # priorité à ceux qui ont le moins de créneaux
+
+            for nom in candidats_solo:
+                if len(creneau['affectes']) < max_par_date:
+                    min_distance = min([(creneau['dt'] - d).days for d in affectations[nom]] + [float('inf')])
+                    if min_distance >= DELAI_MINIMUM:
                         creneau['affectes'].append(nom)
                         compteur[nom] += 1
                         affectations[nom].append(creneau['dt'])
+
+        # Compléter les créneaux sous le minimum
+        for creneau in creneaux_info:
+            while len(creneau['affectes']) < min_par_date:
+                candidats = [(n, compteur[n]) for n in creneau['dispos']
+                             if n not in creneau['affectes'] and compteur[n] < max_occ_global]
+                if not candidats:
+                    break
+                candidats.sort(key=lambda x: x[1])
+                nom = candidats[0][0]
+                creneau['affectes'].append(nom)
+                compteur[nom] += 1
+                affectations[nom].append(creneau['dt'])
 
         # =====================================================
         # 7️⃣ TRI ET AFFICHAGE
