@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import random
-from dateparser.search import search_dates
 import matplotlib.pyplot as plt
 
 st.title("Répartition égalitaire bénévoles / enfants (étalée)")
@@ -118,19 +117,23 @@ if uploaded_file:
         affectations = {nom: [] for nom in noms_uniques}
         binomes_non_places = []
 
-        # Parser les dates
+        # Parsing des dates (version simplifiée)
+        mois_fr = {
+            'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
+            'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
+            'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
+        }
+
         def parse_dt(row):
             try:
-                date_str = str(row['Date']).strip()
+                date_str = str(row['Date']).strip().lower()
                 horaire_str = str(row['Horaires']).strip()
-                dates = search_dates(date_str, languages=['fr'])
-                if dates:
-                    dt = dates[0][1]
-                    if ':' in horaire_str:
-                        heure, minute = map(int, horaire_str.split(':'))
-                        dt = dt.replace(hour=heure, minute=minute)
-                    return dt
-                return pd.to_datetime("1900-01-01 00:00")
+                parts = date_str.split()
+                jour = int(parts[1])
+                mois = mois_fr[parts[2]]
+                annee = 2026  # ou l'année de ton choix
+                heure = int(horaire_str.split(':')[0]) if ':' in horaire_str else 0
+                return pd.Timestamp(year=annee, month=mois, day=jour, hour=heure)
             except:
                 return pd.to_datetime("1900-01-01 00:00")
 
