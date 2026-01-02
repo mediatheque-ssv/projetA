@@ -112,15 +112,31 @@ if uploaded_file:
 
         DELAI_MINIMUM = 7
 
-        # Trier CSV par datetime
+        # Trier CSV par datetime (gérer mois en français)
+        mois_fr = {
+            'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
+            'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
+            'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
+        }
+        
         def parse_dt(row):
             try:
-                date_str = str(row['Date']).strip()
+                date_str = str(row['Date']).strip().lower()
                 horaire_str = str(row['Horaires']).strip()
+                
+                # Extraire jour et mois depuis "mercredi 7 janvier"
+                parts = date_str.split()
+                jour = int(parts[1]) if len(parts) > 1 else 1
+                mois_nom = parts[2] if len(parts) > 2 else 'janvier'
+                mois = mois_fr.get(mois_nom, 1)
+                
                 # Convertir "10h" en "10:00"
                 horaire_str = horaire_str.replace('h', ':00') if 'h' in horaire_str else horaire_str
-                return pd.to_datetime(f"{date_str} {horaire_str}", dayfirst=True)
-            except:
+                heure = int(horaire_str.split(':')[0]) if ':' in horaire_str else 0
+                minute = int(horaire_str.split(':')[1]) if ':' in horaire_str and len(horaire_str.split(':')) > 1 else 0
+                
+                return pd.Timestamp(year=2026, month=mois, day=jour, hour=heure, minute=minute)
+            except Exception as e:
                 return pd.to_datetime("1900-01-01 00:00")
         
         df_sorted = df.copy()
