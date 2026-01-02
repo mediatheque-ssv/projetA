@@ -3,7 +3,7 @@ import pandas as pd
 import random
 import matplotlib.pyplot as plt
 
-st.title("Répartition optimisée des bénévoles/enfants")
+st.title("Répartition optimisée des bénévoles/enfants (tous mois)")
 
 # =====================================================
 # 1️⃣ IMPORT DU CSV
@@ -84,17 +84,16 @@ if uploaded_file:
             st.write(f"- {a} + {b}")
 
     # =====================================================
-    # 5️⃣ ALGORITHME DE RÉPARTITION OPTIMISÉ
+    # 5️⃣ ALGORITHME DE RÉPARTITION OPTIMISÉ POUR TOUS LES MOIS
     # =====================================================
     if st.button("Lancer la répartition optimisée"):
         # Initialisation
         compteur = {nom: 0 for nom in noms_uniques}
         affectations = {nom: [] for nom in noms_uniques}
 
-        # Parsing des dates
+        # Parsing des dates (pour janvier, février, mars)
         mois_fr = {
-            'janvier':1, 'février':2, 'mars':3, 'avril':4, 'mai':5, 'juin':6,
-            'juillet':7, 'août':8, 'septembre':9, 'octobre':10, 'novembre':11, 'décembre':12
+            'janvier': 1, 'février': 2, 'mars': 3
         }
 
         def parse_dt(row):
@@ -103,16 +102,17 @@ if uploaded_file:
                 horaire_str = str(row['Horaires']).strip()
                 parts = date_str.split()
                 jour = int(parts[1])
-                mois = mois_fr[parts[2]]
-                annee = 2026
+                mois = mois_fr[parts[2]]  # Ex: "mercredi 7 janvier" → mois = 1
+                annee = 2026  # Année arbitraire
                 heure = int(horaire_str.split('h')[0]) if 'h' in horaire_str else 0
                 return pd.Timestamp(year=annee, month=mois, day=jour, hour=heure)
-            except:
+            except Exception as e:
+                st.warning(f"Erreur de parsing pour {date_str} : {e}")
                 return pd.to_datetime("1900-01-01")
 
         df['dt'] = df.apply(parse_dt, axis=1)
-        df_sorted = df.sort_values("dt")  # <-- Définition de df_sorted AVANT son utilisation
-        mid_date = df_sorted['dt'].quantile(0.5)  # Date médiane
+        df_sorted = df.sort_values("dt")  # Tri par date
+        mid_date = df_sorted['dt'].quantile(0.5)  # Date médiane pour tous les mois
         max_early_occurrences = max_occ_global // 2
 
         # Préparation des créneaux
@@ -168,7 +168,7 @@ if uploaded_file:
                         compteur[nom] += 1
                         affectations[nom].append(creneau['dt'])
 
-        # Remplissage forcé des créneaux vides en fin de période
+        # Remplissage forcé des créneaux vides
         for creneau in creneaux_info:
             if len(creneau['affectes']) < min_par_date:
                 sous_representes = [n for n in creneau['dispos'] if compteur[n] < (sum(compteur.values())/len(compteur))]
@@ -182,7 +182,7 @@ if uploaded_file:
         # =====================================================
         # 6️⃣ AFFICHAGE DES RÉSULTATS
         # =====================================================
-        st.subheader("Répartition optimisée")
+        st.subheader("Répartition optimisée (tous mois)")
         for creneau in sorted(creneaux_info, key=lambda x: x['dt']):
             st.write(f"{creneau['cle']} : {', '.join(creneau['affectes']) if creneau['affectes'] else 'Aucun'} ({max_par_date - len(creneau['affectes'])} place(s) restante(s))")
 
@@ -217,6 +217,6 @@ if uploaded_file:
         st.download_button(
             "Télécharger la répartition CSV",
             data=csv,
-            file_name="repartition_optimisee.csv",
+            file_name="repartition_tous_mois.csv",
             mime="text/csv"
         )
