@@ -3,15 +3,12 @@ import pandas as pd
 import random
 import matplotlib.pyplot as plt
 
-st.title("Répartition optimisée des bénévoles/enfants (version finale)")
+st.title("Répartition équilibrée des bénévoles/enfants (version finale optimisée)")
 
 # =====================================================
 # 1️⃣ IMPORT ET VÉRIFICATION DU CSV
 # =====================================================
-uploaded_file = st.file_uploader(
-    "Importer le CSV (Date ; Horaires ; Noms_dispos)",
-    type=["csv"]
-)
+uploaded_file = st.file_uploader("Importer le CSV (Date ; Horaires ; Noms_dispos)", type=["csv"])
 
 if uploaded_file:
     try:
@@ -20,14 +17,13 @@ if uploaded_file:
         st.error(f"Erreur de lecture du CSV : {e}")
         st.stop()
 
-    # Nettoyage des noms de colonnes
     df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
     if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
         st.error(f"Colonnes manquantes. Attendu : Date, Horaires, Noms_dispos. Trouvé : {df.columns.tolist()}")
         st.stop()
 
-    st.subheader("Aperçu du CSV")
-    st.dataframe(df.head(10))  # Affiche les 10 premières lignes
+    st.subheader("Aperçu du CSV (10 premières lignes)")
+    st.dataframe(df.head(10))
 
     # =====================================================
     # 2️⃣ EXTRACTION DES NOMS ET PARAMÈTRES
@@ -47,16 +43,16 @@ if uploaded_file:
     st.info(f"Séparateur détecté : '{separator}'")
 
     # =====================================================
-    # 3️⃣ PARAMÈTRES DE RÉPARTITION
+    # 3️⃣ PARAMÈTRES OPTIMISÉS
     # =====================================================
     st.subheader("Paramètres de répartition")
     col1, col2 = st.columns(2)
     with col1:
-        min_par_date = st.slider("Nombre minimal d'enfants par créneau", 1, 10, 3)
-        max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_par_date, 10, 5)
+        min_par_date = st.slider("Min enfants/créneau", 1, 10, 3)
+        max_par_date = st.slider("Max enfants/créneau", min_par_date, 10, 5)
     with col2:
-        delai_minimum = st.slider("Délai minimum entre 2 créneaux (jours)", 1, 14, 7)
-        max_occ_global = st.number_input("Nombre maximal d'occurrences par enfant", 1, 20, 6)
+        delai_minimum = st.slider("Délai min entre créneaux (jours)", 1, 14, 7)
+        max_occ_global = st.number_input("Max occurrences/enfant", 1, 20, 6)
 
     # =====================================================
     # 4️⃣ GESTION DES BINÔMES
@@ -64,48 +60,32 @@ if uploaded_file:
     st.subheader("Binômes à ne pas séparer")
     if "binomes" not in st.session_state:
         st.session_state.binomes = []
-
     col1, col2 = st.columns(2)
     with col1:
         enfant_a = st.selectbox("Enfant A", noms_uniques, key="a")
     with col2:
         enfant_b = st.selectbox("Enfant B", noms_uniques, key="b")
-
-    if (enfant_a != enfant_b and
-        st.button("Ajouter le binôme") and
+    if (enfant_a != enfant_b and st.button("Ajouter binôme") and
         (enfant_a, enfant_b) not in st.session_state.binomes and
         (enfant_b, enfant_a) not in st.session_state.binomes):
         st.session_state.binomes.append((enfant_a, enfant_b))
-
     if st.session_state.binomes:
         st.write("Binômes définis :")
         for a, b in st.session_state.binomes:
             st.write(f"- {a} + {b}")
 
     # =====================================================
-    # 5️⃣ PARAMÈTRES DE PARSE DES DATES (janvier, février, mars)
+    # 5️⃣ PARSE DES DATES (janvier, février, mars)
     # =====================================================
-    mois_fr = {
-        'janvier': 1,
-        'février': 2,
-        'mars': 3,
-        'fevrier': 2,  # Variante sans accent
-    }
+    mois_fr = {'janvier':1, 'février':2, 'mars':3, 'fevrier':2}
 
     def parse_dt(row):
         try:
             date_str = str(row['Date']).strip().lower()
             horaire_str = str(row['Horaires']).strip()
             parts = date_str.split()
-            if len(parts) < 3:
-                st.warning(f"Format de date invalide : '{date_str}'")
-                return pd.to_datetime("1900-01-01")
             jour = int(parts[1])
-            mois_nom = parts[2]
-            if mois_nom not in mois_fr:
-                st.warning(f"Mois non reconnu : '{mois_nom}' (utilisez janvier/février/mars)")
-                return pd.to_datetime("1900-01-01")
-            mois = mois_fr[mois_nom]
+            mois = mois_fr[parts[2]]
             annee = 2026
             heure = int(horaire_str.split('h')[0]) if 'h' in horaire_str else 0
             return pd.Timestamp(year=annee, month=mois, day=jour, hour=heure)
@@ -114,9 +94,9 @@ if uploaded_file:
             return pd.to_datetime("1900-01-01")
 
     # =====================================================
-    # 6️⃣ LANCEMENT DE LA RÉPARTITION
+    # 6️⃣ LANCEMENT DE LA RÉPARTITION OPTIMISÉE
     # =====================================================
-    if st.button("Lancer la répartition optimisée"):
+    if st.button("Lancer la répartition équilibrée"):
         # Initialisation
         compteur = {nom: 0 for nom in noms_uniques}
         affectations = {nom: [] for nom in noms_uniques}
@@ -131,7 +111,8 @@ if uploaded_file:
             if row['dt'] != pd.to_datetime("1900-01-01"):
                 mois_presents.add(row['dt'].month)
         st.subheader("Mois détectés dans le CSV")
-        st.write(f"Mois présents : {sorted([list(mois_fr.keys())[m-1] for m in mois_presents])}")
+        mois_noms = {1: 'janvier', 2: 'février', 3: 'mars'}
+        st.write(f"Mois présents : {', '.join([mois_noms[m] for m in sorted(mois_presents)])}")
 
         # Préparation des créneaux
         creneaux_info = []
@@ -151,18 +132,18 @@ if uploaded_file:
         max_early_occurrences = max_occ_global // 2
 
         # =====================================================
-        # 7️⃣ ALGORITHME D'AFFECTATION (optimisé)
+        # 7️⃣ ALGORITHME D'AFFECTATION ÉQUILIBRÉ
         # =====================================================
         for _ in range(100):  # 100 itérations pour converger
+            moyenne = sum(compteur.values()) / len(compteur)
             for creneau in creneaux_info:
                 if len(creneau['affectes']) >= max_par_date:
                     continue
 
-                # Limiter les affectations avant la mi-parcours
-                if creneau['dt'] < mid_date:
-                    for nom in creneau['dispos'][:]:
-                        if compteur[nom] >= max_early_occurrences:
-                            creneau['dispos'].remove(nom)
+                # Limiter les affectations des sur-représentés
+                for nom in creneau['dispos'][:]:
+                    if compteur[nom] > moyenne + 1:
+                        creneau['dispos'].remove(nom)
 
                 # Affectation des binômes
                 for a, b in st.session_state.binomes:
@@ -178,10 +159,10 @@ if uploaded_file:
                             affectations[a].append(creneau['dt'])
                             affectations[b].append(creneau['dt'])
 
-                # Affectation solo (priorité aux moins affectés)
+                # Affectation solo (priorité aux sous-représentés)
                 candidats = sorted(
-                    [n for n in creneau['dispos'] if n not in creneau['affectes'] and compteur[n] < max_occ_global],
-                    key=lambda x: compteur[x]
+                    [n for n in creneau['dispos'] if n not in creneau['affectes']],
+                    key=lambda x: (compteur[x], random.random())
                 )
                 for nom in candidats:
                     if len(creneau['affectes']) >= max_par_date:
@@ -197,15 +178,13 @@ if uploaded_file:
         # =====================================================
         for creneau in creneaux_info:
             if len(creneau['affectes']) < min_par_date:
-                candidats = [n for n in creneau['dispos'] if n not in creneau['affectes']]
-                random.shuffle(candidats)  # Mélanger pour équité
-                for nom in candidats:
-                    if len(creneau['affectes']) >= min_par_date:
-                        break
-                    creneau['affectes'].append(nom)
-                    compteur[nom] += 1
-                    if creneau['dt'].month == 3:  # Mars
-                        st.warning(f"{nom} ajouté·e à {creneau['cle']} pour remplir mars")
+                sous_representes = [n for n, c in compteur.items() if c < moyenne - 1]
+                random.shuffle(sous_representes)
+                for nom in sous_representes:
+                    if nom in creneau['dispos'] and nom not in creneau['affectes'] and len(creneau['affectes']) < min_par_date:
+                        creneau['affectes'].append(nom)
+                        compteur[nom] += 1
+                        st.warning(f"{nom} forcé·e dans {creneau['cle']} pour équilibrer")
 
         # =====================================================
         # 9️⃣ AFFICHAGE DES RÉSULTATS
@@ -246,6 +225,6 @@ if uploaded_file:
         st.download_button(
             "Télécharger la répartition CSV",
             data=csv,
-            file_name="repartition_optimisee.csv",
+            file_name="repartition_equilibree.csv",
             mime="text/csv"
         )
