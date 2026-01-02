@@ -3,7 +3,7 @@ import pandas as pd
 import random
 import matplotlib.pyplot as plt
 
-st.title("Répartition optimisée des bénévoles/enfants (version finale)")
+st.title("Répartition optimisée des bénévoles/enfants (version équilibrée)")
 
 # =====================================================
 # 1️⃣ IMPORT ET VÉRIFICATION DU CSV
@@ -27,7 +27,7 @@ if uploaded_file:
         st.stop()
 
     st.subheader("Aperçu du CSV")
-    st.dataframe(df.head(10))  # Affiche les 10 premières lignes
+    st.dataframe(df.head(10))
 
     # =====================================================
     # 2️⃣ EXTRACTION DES NOMS ET PARAMÈTRES
@@ -83,13 +83,13 @@ if uploaded_file:
             st.write(f"- {a} + {b}")
 
     # =====================================================
-    # 5️⃣ PARAMÈTRES DE PARSE DES DATES (janvier, février, mars)
+    # 5️⃣ PARAMÈTRES DE PARSE DES DATES
     # =====================================================
     mois_fr = {
         'janvier': 1,
         'février': 2,
         'mars': 3,
-        'fevrier': 2,  # Variante sans accent
+        'fevrier': 2,
     }
 
     def parse_dt(row):
@@ -111,7 +111,7 @@ if uploaded_file:
             return pd.Timestamp(year=annee, month=mois, day=jour, hour=heure)
         except Exception as e:
             st.warning(f"Erreur de parsing pour '{row['Date']}' : {e}")
-            return pd.to_datetime("1900-01-01")
+            return pd.Timestamp("1900-01-01")
 
     # =====================================================
     # 6️⃣ LANCEMENT DE LA RÉPARTITION
@@ -128,6 +128,11 @@ if uploaded_file:
             for nom in dispos:
                 disponibilites_totales[nom] += 1
 
+        # Calculer l'objectif moyen d'affectations
+        total_places = len(df) * max_par_date
+        objectif_moyen = total_places // len(noms_uniques)
+        st.write(f"Objectif moyen d'affectations par enfant : {objectif_moyen}")
+
         # Parsing et tri des dates
         df['dt'] = df.apply(parse_dt, axis=1)
         df_sorted = df.sort_values("dt")
@@ -135,7 +140,7 @@ if uploaded_file:
         # Vérification des mois détectés
         mois_presents = set()
         for _, row in df_sorted.iterrows():
-            if row['dt'] != pd.to_datetime("1900-01-01"):
+            if row['dt'] != pd.Timestamp("1900-01-01"):
                 mois_presents.add(row['dt'].month)
         st.subheader("Mois détectés dans le CSV")
         st.write(f"Mois présents : {sorted([list(mois_fr.keys())[m-1] for m in mois_presents])}")
@@ -143,7 +148,7 @@ if uploaded_file:
         # Préparation des créneaux
         creneaux_info = []
         for _, row in df_sorted.iterrows():
-            if row['dt'] == pd.to_datetime("1900-01-01"):
+            if row['dt'] == pd.Timestamp("1900-01-01"):
                 continue
             dispos = [n.strip() for n in str(row["Noms_dispos"]).split(separator) if n.strip() in noms_uniques]
             creneaux_info.append({
@@ -158,7 +163,7 @@ if uploaded_file:
         max_early_occurrences = max_occ_global // 2
 
         # =====================================================
-        # 7️⃣ ALGORITHME D'AFFECTATION (optimisé)
+        # 7️⃣ ALGORITHME D'AFFECTATION (optimisé et équilibré)
         # =====================================================
         for _ in range(100):  # 100 itérations pour converger
             for creneau in creneaux_info:
@@ -185,34 +190,44 @@ if uploaded_file:
                             affectations[a].append(creneau['dt'])
                             affectations[b].append(creneau['dt'])
 
-                # Affectation solo (priorité aux enfants avec le moins de disponibilités)
+                # Affectation solo (priorité aux enfants sous-représentés)
                 candidats = sorted(
                     [n for n in creneau['dispos'] if n not in creneau['affectes'] and compteur[n] < max_occ_global],
-                    key=lambda x: (disponibilites_totales[x], compteur[x])  # Priorité aux enfants avec le moins de disponibilités
+                    key=lambda x: (
+                        compteur[x] - objectif_moyen,  # Priorité aux enfants sous-représentés
+                        disponibilites_totales[x],       # Puis priorité aux enfants avec le moins de disponibilités
+                    )
                 )
                 for nom in candidats:
                     if len(creneau['affectes']) >= max_par_date:
                         break
                     last = affectations[nom][-1] if affectations[nom] else pd.Timestamp("1900-01-01")
-                    if (creneau['dt'] - last).days >= delai_minimum:
+                    # Assouplir le délai minimum pour les enfants sous-représentés
+                    delai_applique = delai_minimum
+                    if compteur[nom] < objectif_moyen - 1:
+                        delai_applique = max(1, delai_minimum - 2)
+                    if (creneau['dt'] - last).days >= delai_applique:
                         creneau['affectes'].append(nom)
                         compteur[nom] += 1
                         affectations[nom].append(creneau['dt'])
 
         # =====================================================
-        # 8️⃣ REMPLIR LES CRÉNEAUX VIDES (surtout mars)
+        # 8️⃣ REMPLIR LES CRÉNEAUX VIDES (priorité aux sous-représentés)
         # =====================================================
         for creneau in creneaux_info:
             if len(creneau['affectes']) < min_par_date:
-                candidats = [n for n in creneau['dispos'] if n not in creneau['affectes']]
-                random.shuffle(candidats)  # Mélanger pour équité
+                candidats = sorted(
+                    [n for n in creneau['dispos'] if n not in creneau['affectes']],
+                    key=lambda x: (
+                        compteur[x] - objectif_moyen,  # Priorité aux enfants sous-représentés
+                        random.random()                 # Mélange aléatoire pour équité
+                    )
+                )
                 for nom in candidats:
                     if len(creneau['affectes']) >= min_par_date:
                         break
                     creneau['affectes'].append(nom)
                     compteur[nom] += 1
-                    if creneau['dt'].month == 3:  # Mars
-                        st.warning(f"{nom} ajouté·e à {creneau['cle']} pour remplir mars")
 
         # =====================================================
         # 9️⃣ AFFICHAGE DES RÉSULTATS
@@ -227,8 +242,8 @@ if uploaded_file:
         st.subheader("Statistiques")
         moyenne = sum(compteur.values()) / len(compteur)
         st.write(f"Moyenne d'affectations/enfant : {moyenne:.1f}")
-        sous_representes = [n for n, c in compteur.items() if c < moyenne - 1]
-        sur_representes = [n for n, c in compteur.items() if c > moyenne + 1]
+        sous_representes = [n for n, c in compteur.items() if c < objectif_moyen - 1]
+        sur_representes = [n for n, c in compteur.items() if c > objectif_moyen + 1]
         if sous_representes:
             st.warning(f"Enfants sous-représentés : {', '.join(sous_representes)}")
         if sur_representes:
@@ -237,7 +252,8 @@ if uploaded_file:
         # Visualisation
         fig, ax = plt.subplots()
         ax.bar(compteur.keys(), compteur.values())
-        ax.axhline(y=moyenne, color='r', linestyle='--', label=f"Moyenne ({moyenne:.1f})")
+        ax.axhline(y=objectif_moyen, color='r', linestyle='--', label=f"Objectif moyen ({objectif_moyen})")
+        ax.axhline(y=moyenne, color='g', linestyle='--', label=f"Moyenne réelle ({moyenne:.1f})")
         ax.set_xticklabels(compteur.keys(), rotation=90)
         ax.set_ylabel("Nombre d'affectations")
         ax.legend()
@@ -253,6 +269,6 @@ if uploaded_file:
         st.download_button(
             "Télécharger la répartition CSV",
             data=csv,
-            file_name="repartition_optimisee.csv",
+            file_name="repartition_optimisee_equilibree.csv",
             mime="text/csv"
         )
