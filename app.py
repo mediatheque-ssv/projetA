@@ -5,6 +5,9 @@ from datetime import datetime, timedelta
 
 st.title("Répartition améliorée bénévoles / enfants")
 
+# =====================================================
+# 1️⃣ IMPORT DU CSV
+# =====================================================
 uploaded_file = st.file_uploader(
     "Importer le CSV (Date ; Horaires ; Noms_dispos)",
     type=["csv"]
@@ -28,7 +31,9 @@ if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
     )
     st.stop()
 
-# --- Extraire noms uniques
+# =====================================================
+# 2️⃣ EXTRACTION DES NOMS
+# =====================================================
 noms_uniques = sorted({
     n.strip()
     for cell in df["Noms_dispos"]
@@ -40,7 +45,9 @@ if noms_uniques:
     st.subheader("Enfants détectés")
     st.write(noms_uniques)
 
-# --- Paramètres
+# =====================================================
+# 3️⃣ PARAMÈTRES DES CRÉNEAUX
+# =====================================================
 if noms_uniques:
     st.subheader("Paramètres des créneaux")
     min_par_date = st.slider("Nombre minimal d'enfants par créneau", 1, 10, 4)
@@ -53,42 +60,54 @@ if noms_uniques:
         1, total_creaneaux, occ_recommandee
     )
 
-# --- Binômes
+# =====================================================
+# 4️⃣ BINÔMES
+# =====================================================
 st.subheader("Binômes à ne pas séparer")
 if "binomes" not in st.session_state:
     st.session_state.binomes = []
 
-if noms_uniques:
-    col1, col2 = st.columns(2)
-    with col1:
-        enfant_a = st.selectbox("Enfant A", noms_uniques, key="a")
-    with col2:
-        enfant_b = st.selectbox("Enfant B", noms_uniques, key="b")
-    if enfant_a != enfant_b and st.button("Ajouter le binôme"):
-        if (enfant_a, enfant_b) not in st.session_state.binomes and (enfant_b, enfant_a) not in st.session_state.binomes:
-            st.session_state.binomes.append((enfant_a, enfant_b))
+col1, col2 = st.columns(2)
+with col1:
+    enfant_a = st.selectbox("Enfant A", noms_uniques, key="select_a")
+with col2:
+    enfant_b = st.selectbox("Enfant B", noms_uniques, key="select_b")
+
+if st.button("Ajouter le binôme"):
+    if enfant_a != enfant_b and (enfant_a, enfant_b) not in st.session_state.binomes and (enfant_b, enfant_a) not in st.session_state.binomes:
+        st.session_state.binomes.append((enfant_a, enfant_b))
+
+if st.session_state.binomes:
+    st.write("Binômes définis :")
+    for a, b in st.session_state.binomes:
+        st.write(f"- {a} + {b}")
 
 binomes = st.session_state.binomes
 
 # =====================================================
-# --- Fonction pour parser les dates françaises
+# 5️⃣ PARSING DES DATES
 # =====================================================
 def parse_date_fr(date_str, default_year=2026):
-    # Exemple : "mercredi 7 janvier" → "7 janvier 2026"
+    # Retire le jour de la semaine
     parts = date_str.split()
-    day = parts[1]
-    month = parts[2]
-    try:
-        dt = datetime.strptime(f"{day} {month} {default_year}", "%d %B %Y")
-    except:
-        dt = pd.NaT
-    return dt
+    if len(parts) >= 3:
+        day = parts[1]
+        month = parts[2]
+        try:
+            dt = datetime.strptime(f"{day} {month} {default_year}", "%d %B %Y")
+        except:
+            dt = pd.NaT
+        return dt
+    else:
+        return pd.NaT
 
-# --- Répartition
+df["Date_dt"] = df["Date"].apply(parse_date_fr)
+df_sorted = df.sort_values("Date_dt").reset_index(drop=True)
+
+# =====================================================
+# 6️⃣ RÉPARTITION
+# =====================================================
 if st.button("Répartir les enfants"):
-
-    df["Date_dt"] = df["Date"].apply(parse_date_fr)
-    df_sorted = df.sort_values("Date_dt").reset_index(drop=True)
 
     repartition = {}
     compteur = {nom: 0 for nom in noms_uniques}
@@ -104,7 +123,7 @@ if st.button("Répartir les enfants"):
         repartition[cle] = []
         deja_affectes = set()
 
-        # --- Ajouter binômes
+        # --- BINÔMES
         binomes_dispos = [
             (a, b) for a, b in binomes
             if a in dispo and b in dispo
@@ -123,7 +142,7 @@ if st.button("Répartir les enfants"):
             dernier_creneau[b] = date
             deja_affectes.update([a, b])
 
-        # --- Ajouter solos
+        # --- SOLO
         solos_dispos = [
             n for n in dispo
             if n not in deja_affectes
@@ -149,7 +168,9 @@ if st.button("Répartir les enfants"):
                     dernier_creneau[n] = date
                     deja_affectes.add(n)
 
-    # --- Tri final
+    # =====================================================
+    # 7️⃣ TRI FINAL
+    # =====================================================
     def cle_tri(cle_str):
         date_str, horaire_str = cle_str.split("|")
         try:
@@ -159,7 +180,9 @@ if st.button("Répartir les enfants"):
 
     repartition_tri = dict(sorted(repartition.items(), key=cle_tri))
 
-    # --- Affichage
+    # =====================================================
+    # 8️⃣ AFFICHAGE
+    # =====================================================
     st.subheader("Répartition finale")
     for cle, enfants in repartition_tri.items():
         st.write(f"{cle} : {', '.join(enfants)} ({max_par_date - len(enfants)} place(s) restante(s))")
