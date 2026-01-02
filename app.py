@@ -3,7 +3,7 @@ import pandas as pd
 import random
 from datetime import timedelta
 
-st.title("Répartition égalitaire bénévoles / enfants")
+st.title("Répartition égalitaire bénévoles / enfants (étalée)")
 
 # =====================================================
 # 1️⃣ IMPORT DU CSV
@@ -15,14 +15,13 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file:
 
-    # -------- Lecture CSV --------
+    # Lecture CSV
     try:
         df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
     except Exception as e:
         st.error(f"Erreur de lecture du CSV : {e}")
         st.stop()
 
-    # -------- Nettoyage colonnes --------
     df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
 
     if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
@@ -60,7 +59,7 @@ if uploaded_file:
 
     min_par_date = st.slider(
         "Nombre minimal d'enfants par créneau",
-        min_value=1, max_value=10, value=3
+        min_value=1, max_value=10, value=4
     )
 
     max_par_date = st.slider(
@@ -112,7 +111,7 @@ if uploaded_file:
     binomes = st.session_state.binomes
 
     # =====================================================
-    # 6️⃣ RÉPARTITION ÉGALITAIRE AVEC ESPACEMENT
+    # 6️⃣ RÉPARTITION ÉGALITAIRE AVEC ESPACEMENT ET MIN PAR CRÉNEAU
     # =====================================================
     if st.button("Répartir les enfants"):
 
@@ -124,7 +123,17 @@ if uploaded_file:
         DELAI_PREFERENTIEL = 14  # jours
         DELAI_MINIMUM = 7        # jours
 
-        for _, row in df.iterrows():
+        # trier les lignes CSV par date + horaire
+        def parse_dt(row):
+            try:
+                return pd.to_datetime(f"{row['Date']} {row['Horaires']}", dayfirst=True)
+            except:
+                return pd.to_datetime("1900-01-01 00:00")
+        df_sorted = df.copy()
+        df_sorted['dt'] = df_sorted.apply(parse_dt, axis=1)
+        df_sorted = df_sorted.sort_values("dt")
+
+        for _, row in df_sorted.iterrows():
             date = str(row["Date"]).strip() or "1900-01-01"
             horaire = str(row["Horaires"]).strip() or "00:00"
             dispos = [n.strip() for n in str(row["Noms_dispos"]).split(";") if n.strip()]
@@ -133,7 +142,6 @@ if uploaded_file:
             repartition[cle] = []
             deja_affectes_par_date[cle] = set()
 
-            # conversion robuste
             date_horaire_dt = pd.to_datetime(f"{date} {horaire}", dayfirst=True, errors="coerce")
             if pd.isna(date_horaire_dt):
                 date_horaire_dt = pd.to_datetime("1900-01-01 00:00")
@@ -162,41 +170,40 @@ if uploaded_file:
                 affectations[a].append(date_horaire_dt)
                 affectations[b].append(date_horaire_dt)
 
-            # ---- SOLO, triés par moins de présences et plus grand espacement
+            # ---- SOLO, triés par : moins de créneaux ce mois + plus grand espacement
             score_solos = []
             for n in dispos:
                 if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global:
-                    distances = [(date_horaire_dt - d).days for d in affectations[n]] or [float('inf')]
-                    score = min(distances)
-                    score_solos.append((n, score))
+                    last_dates = affectations[n]
+                    distance = min([(date_horaire_dt - d).days for d in last_dates] + [float('inf')])
+                    score_solos.append((n, distance, compteur[n]))
+            # tri : plus grand espacement d'abord, puis moins de créneaux
+            score_solos.sort(key=lambda x: (-x[1], x[2]))
 
-            # tri : espacement décroissant (priorité grands écarts), puis moins de créneaux
-            score_solos.sort(key=lambda x: (-x[1], compteur[x[0]]))
-            for nom, dist in score_solos:
+            for nom, dist, _ in score_solos:
                 if len(repartition[cle]) < max_par_date:
                     repartition[cle].append(nom)
                     compteur[nom] += 1
                     deja_affectes_par_date[cle].add(nom)
                     affectations[nom].append(date_horaire_dt)
 
-            # ---- Vérification du minimum
-            if len(repartition[cle]) < min_par_date:
-                restants = [n for n in noms_uniques if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global]
-                random.shuffle(restants)
-                for n in restants:
-                    if len(repartition[cle]) < min_par_date:
-                        repartition[cle].append(n)
-                        compteur[n] += 1
-                        deja_affectes_par_date[cle].add(n)
-                        affectations[n].append(date_horaire_dt)
-                    else:
-                        break
+            # ---- Compléter pour atteindre min_par_date si nécessaire
+            restants = [n for n in noms_uniques if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global]
+            random.shuffle(restants)
+            for n in restants:
+                if len(repartition[cle]) < min_par_date:
+                    repartition[cle].append(n)
+                    compteur[n] += 1
+                    deja_affectes_par_date[cle].add(n)
+                    affectations[n].append(date_horaire_dt)
+                else:
+                    break
 
         # =====================================================
         # 7️⃣ TRI PAR DATE + HORAIRE (robuste)
         # =====================================================
         def cle_tri(cle_str):
-            cle_str = str(cle_str)  # ← sécurité pour éviter AttributeError
+            cle_str = str(cle_str)
             parts = cle_str.split("|")
             if len(parts) != 2:
                 date_str, horaire_str = "1900-01-01", "00:00"
