@@ -41,24 +41,26 @@ noms_uniques = sorted({
     if n.strip()
 })
 
-if noms_uniques:
-    st.subheader("Enfants détectés")
-    st.write(noms_uniques)
+if not noms_uniques:
+    st.warning("Aucun enfant détecté ! Vérifie le CSV et le séparateur ';'")
+    st.stop()
+
+st.subheader("Enfants détectés")
+st.write(noms_uniques)
 
 # =====================================================
 # 3️⃣ PARAMÈTRES DES CRÉNEAUX
 # =====================================================
-if noms_uniques:
-    st.subheader("Paramètres des créneaux")
-    min_par_date = st.slider("Nombre minimal d'enfants par créneau", 1, 10, 4)
-    max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_par_date, 10, max(5, min_par_date))
-    total_creaneaux = len(df)
-    places_totales = total_creaneaux * max_par_date
-    occ_recommandee = round(places_totales / len(noms_uniques))
-    max_occ_global = st.number_input(
-        "Nombre maximal d'occurrences par enfant (pour tous)",
-        1, total_creaneaux, occ_recommandee
-    )
+st.subheader("Paramètres des créneaux")
+min_par_date = st.slider("Nombre minimal d'enfants par créneau", 1, 10, 4)
+max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_par_date, 10, max(5, min_par_date))
+total_creaneaux = len(df)
+places_totales = total_creaneaux * max_par_date
+occ_recommandee = round(places_totales / len(noms_uniques))
+max_occ_global = st.number_input(
+    "Nombre maximal d'occurrences par enfant (pour tous)",
+    1, total_creaneaux, occ_recommandee
+)
 
 # =====================================================
 # 4️⃣ BINÔMES
@@ -74,7 +76,11 @@ with col2:
     enfant_b = st.selectbox("Enfant B", noms_uniques, key="select_b")
 
 if st.button("Ajouter le binôme"):
-    if enfant_a != enfant_b and (enfant_a, enfant_b) not in st.session_state.binomes and (enfant_b, enfant_a) not in st.session_state.binomes:
+    if (
+        enfant_a != enfant_b
+        and (enfant_a, enfant_b) not in st.session_state.binomes
+        and (enfant_b, enfant_a) not in st.session_state.binomes
+    ):
         st.session_state.binomes.append((enfant_a, enfant_b))
 
 if st.session_state.binomes:
@@ -88,16 +94,14 @@ binomes = st.session_state.binomes
 # 5️⃣ PARSING DES DATES
 # =====================================================
 def parse_date_fr(date_str, default_year=2026):
-    parts = date_str.split()
-    if len(parts) >= 3:
+    try:
+        # Exemple attendu : "mercredi 7 janvier"
+        parts = date_str.split()
         day = parts[1]
         month = parts[2]
-        try:
-            dt = datetime.strptime(f"{day} {month} {default_year}", "%d %B %Y")
-        except:
-            dt = pd.NaT
+        dt = datetime.strptime(f"{day} {month} {default_year}", "%d %B %Y")
         return dt
-    else:
+    except:
         return pd.NaT
 
 df["Date_dt"] = df["Date"].apply(parse_date_fr)
@@ -108,12 +112,16 @@ df_sorted = df.sort_values("Date_dt").reset_index(drop=True)
 # =====================================================
 if "repartition_calc" not in st.session_state:
     st.session_state.repartition_calc = None
+if "calculer_repartition" not in st.session_state:
+    st.session_state.calculer_repartition = False
 
-# =====================================================
-# 7️⃣ RÉPARTITION
-# =====================================================
 if st.button("Répartir les enfants"):
+    st.session_state.calculer_repartition = True
 
+# =====================================================
+# 7️⃣ CALCUL DE LA RÉPARTITION
+# =====================================================
+if st.session_state.calculer_repartition:
     repartition_calc = {}
     compteur = {nom: 0 for nom in noms_uniques}
     dernier_creneau = {nom: pd.Timestamp.min for nom in noms_uniques}
@@ -174,6 +182,7 @@ if st.button("Répartir les enfants"):
                     deja_affectes.add(n)
 
     st.session_state.repartition_calc = (repartition_calc, compteur)
+    st.session_state.calculer_repartition = False
 
 # =====================================================
 # 8️⃣ AFFICHAGE DE LA RÉPARTITION
