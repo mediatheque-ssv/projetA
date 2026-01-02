@@ -108,9 +108,8 @@ if uploaded_file:
 
         repartition = {}
         compteur = {nom: 0 for nom in noms_uniques}
-        affectations = {nom: [] for nom in noms_uniques}  # stocke les datetimes
+        affectations = {nom: [] for nom in noms_uniques}
 
-        DELAI_PREFERENTIEL = 14
         DELAI_MINIMUM = 7
 
         # Trier CSV par datetime
@@ -119,6 +118,7 @@ if uploaded_file:
                 return pd.to_datetime(f"{row['Date']} {row['Horaires']}", dayfirst=True)
             except:
                 return pd.to_datetime("1900-01-01 00:00")
+        
         df_sorted = df.copy()
         df_sorted['dt'] = df_sorted.apply(parse_dt, axis=1)
         df_sorted = df_sorted.sort_values("dt")
@@ -131,52 +131,59 @@ if uploaded_file:
             cle = f"{date} | {horaire}"
             repartition[cle] = []
 
-            date_horaire_dt = pd.to_datetime(f"{date} {horaire}", dayfirst=True, errors="coerce")
-            if pd.isna(date_horaire_dt):
-                date_horaire_dt = pd.to_datetime("1900-01-01 00:00")
+            date_horaire_dt = row['dt']
 
             # ---- BINÔMES
-            binomes_dispos = []
+            binomes_candidats = []
             for a, b in binomes:
                 if (
                     a in dispos and b in dispos
                     and compteur[a] < max_occ_global
                     and compteur[b] < max_occ_global
-                    and len(repartition[cle]) <= max_par_date - 2
                 ):
                     # vérifier espacement
                     min_a = min([(date_horaire_dt - d).days for d in affectations[a]] + [float('inf')])
                     min_b = min([(date_horaire_dt - d).days for d in affectations[b]] + [float('inf')])
                     if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
-                        binomes_dispos.append((a, b))
+                        score_binome = compteur[a] + compteur[b]
+                        binomes_candidats.append((a, b, score_binome))
 
-            random.shuffle(binomes_dispos)
-            for a, b in binomes_dispos:
-                repartition[cle].extend([a, b])
-                compteur[a] += 1
-                compteur[b] += 1
-                affectations[a].append(date_horaire_dt)
-                affectations[b].append(date_horaire_dt)
+            binomes_candidats.sort(key=lambda x: x[2])
+            
+            for a, b, _ in binomes_candidats:
+                if len(repartition[cle]) <= max_par_date - 2:
+                    repartition[cle].extend([a, b])
+                    compteur[a] += 1
+                    compteur[b] += 1
+                    affectations[a].append(date_horaire_dt)
+                    affectations[b].append(date_horaire_dt)
 
-            # ---- SOLO
-            score_solos = []
+            # ---- SOLO avec meilleur scoring
+            candidats_solo = []
             for n in dispos:
                 if n not in repartition[cle] and compteur[n] < max_occ_global:
                     last_dates = affectations[n]
                     distance = min([(date_horaire_dt - d).days for d in last_dates] + [float('inf')])
-                    score_solos.append((n, distance, compteur[n]))
-            score_solos.sort(key=lambda x: (-x[1], x[2]))
+                    
+                    if distance >= DELAI_MINIMUM:
+                        # Score : priorité aux moins affectés, puis espacement
+                        score = (compteur[n] * 1000) - distance
+                        candidats_solo.append((n, score))
+            
+            candidats_solo.sort(key=lambda x: x[1])
 
-            for nom, dist, _ in score_solos:
+            for nom, _ in candidats_solo:
                 if len(repartition[cle]) < max_par_date:
                     repartition[cle].append(nom)
                     compteur[nom] += 1
                     affectations[nom].append(date_horaire_dt)
 
             # ---- Compléter pour atteindre min_par_date
-            restants = [n for n in noms_uniques if n not in repartition[cle] and compteur[n] < max_occ_global]
-            random.shuffle(restants)
-            for n in restants:
+            restants = [(n, compteur[n]) for n in noms_uniques 
+                       if n not in repartition[cle] and compteur[n] < max_occ_global]
+            restants.sort(key=lambda x: x[1])
+            
+            for n, _ in restants:
                 if len(repartition[cle]) < min_par_date:
                     repartition[cle].append(n)
                     compteur[n] += 1
@@ -187,17 +194,22 @@ if uploaded_file:
         # =====================================================
         # 7️⃣ TRI GARANTI PAR DATE/HORAIRE
         # =====================================================
-        def cle_tri(cle):
-            parts = str(cle).split("|", 1)
-            date_str = parts[0].strip() if len(parts) > 0 else "1900-01-01"
+        def cle_tri(item):
+            cle = item[0]
+            parts = cle.split("|")
+            date_str = parts[0].strip()
             horaire_str = parts[1].strip() if len(parts) > 1 else "00:00"
-            date_dt = pd.to_datetime(date_str, dayfirst=True, errors="coerce")
-            if pd.isna(date_dt):
-                date_dt = pd.to_datetime("1900-01-01")
+            
             try:
-                heure_dt = pd.to_datetime(horaire_str, format="%H:%M", errors="coerce").time()
+                date_dt = pd.to_datetime(date_str, dayfirst=True)
+            except:
+                date_dt = pd.to_datetime("1900-01-01")
+            
+            try:
+                heure_dt = pd.to_datetime(horaire_str, format="%H:%M").time()
             except:
                 heure_dt = pd.to_datetime("00:00", format="%H:%M").time()
+            
             return (date_dt, heure_dt)
 
         repartition_tri_list = sorted(repartition.items(), key=cle_tri)
@@ -213,7 +225,8 @@ if uploaded_file:
             )
 
         st.subheader("Occurrences par enfant")
-        st.write(dict(sorted(compteur.items())))
+        compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
+        st.write(compteur_sorted)
 
         jamais_affectes = [nom for nom, c in compteur.items() if c == 0]
         if jamais_affectes:
