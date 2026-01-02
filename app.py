@@ -2,25 +2,10 @@ import streamlit as st
 import pandas as pd
 import random
 
-st.title("Répartition mini-b")
+st.title("Répartition égalitaire bénévoles / enfants")
 
 # =====================================================
-# 1️⃣ PARAMÈTRES GÉNÉRAUX (affichés tout le temps)
-# =====================================================
-st.subheader("Paramètres des créneaux")
-
-min_par_date = st.slider(
-    "Nombre minimal d'enfants par créneau",
-    min_value=1, max_value=10, value=3
-)
-
-max_par_date = st.slider(
-    "Nombre maximal d'enfants par créneau",
-    min_value=min_par_date, max_value=10, value=max(5, min_par_date)
-)
-
-# =====================================================
-# 2️⃣ IMPORT DU CSV
+# 1️⃣ IMPORT DU CSV
 # =====================================================
 uploaded_file = st.file_uploader(
     "Importer le CSV (Date ; Horaires ; Noms_dispos)",
@@ -28,7 +13,6 @@ uploaded_file = st.file_uploader(
 )
 
 if not uploaded_file:
-    st.warning("Importe un CSV pour voir la répartition et utiliser les autres options")
     st.stop()
 
 try:
@@ -37,7 +21,6 @@ except Exception as e:
     st.error(f"Erreur de lecture du CSV : {e}")
     st.stop()
 
-# Nettoyage des colonnes
 df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
 
 if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
@@ -51,7 +34,7 @@ st.subheader("Aperçu du CSV")
 st.dataframe(df)
 
 # =====================================================
-# 3️⃣ EXTRACTION DES NOMS
+# 2️⃣ EXTRACTION DES NOMS
 # =====================================================
 noms_uniques = sorted({
     n.strip()
@@ -67,6 +50,23 @@ else:
     st.warning("Aucun enfant détecté ! Vérifie le CSV et le séparateur ';'")
 
 # =====================================================
+# 3️⃣ PARAMÈTRES DES CRÉNEAUX
+# =====================================================
+st.subheader("Paramètres des créneaux")
+
+# Slider minimum
+min_par_date = st.slider(
+    "Nombre minimal d'enfants par créneau",
+    min_value=1, max_value=10, value=3
+)
+
+# Slider maximum
+max_par_date = st.slider(
+    "Nombre maximal d'enfants par créneau",
+    min_value=min_par_date, max_value=10, value=max(5, min_par_date)
+)
+
+# =====================================================
 # 4️⃣ OCCURRENCES MAXIMALES GLOBALES
 # =====================================================
 total_creaneaux = len(df)
@@ -75,7 +75,7 @@ if noms_uniques:
     occ_recommandee = round(places_totales / len(noms_uniques))
     st.info(f"Total créneaux : {total_creaneaux}, Places totales : {places_totales} → Occurrence idéale par enfant ≈ {occ_recommandee}")
     max_occ_global = st.number_input(
-        "Définir le nombre maximal d'occurrences par enfant (pour tous)",
+        "Nombre maximal d'occurrences par enfant (pour tous)",
         min_value=1,
         max_value=total_creaneaux,
         value=occ_recommandee
