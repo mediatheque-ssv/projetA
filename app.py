@@ -1,13 +1,10 @@
 import streamlit as st
 import pandas as pd
 import random
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 st.title("Répartition améliorée bénévoles / enfants")
 
-# =====================================================
-# 1️⃣ IMPORT DU CSV
-# =====================================================
 uploaded_file = st.file_uploader(
     "Importer le CSV (Date ; Horaires ; Noms_dispos)",
     type=["csv"]
@@ -31,12 +28,7 @@ if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
     )
     st.stop()
 
-st.subheader("Aperçu du CSV")
-st.dataframe(df)
-
-# =====================================================
-# 2️⃣ EXTRACTION DES NOMS
-# =====================================================
+# --- Extraire noms uniques
 noms_uniques = sorted({
     n.strip()
     for cell in df["Noms_dispos"]
@@ -44,43 +36,24 @@ noms_uniques = sorted({
     if n.strip()
 })
 
-st.subheader("Enfants détectés")
 if noms_uniques:
+    st.subheader("Enfants détectés")
     st.write(noms_uniques)
-else:
-    st.warning("Aucun enfant détecté ! Vérifie le CSV et le séparateur ';'")
 
-# =====================================================
-# 3️⃣ PARAMÈTRES DES CRÉNEAUX
-# =====================================================
+# --- Paramètres
 if noms_uniques:
     st.subheader("Paramètres des créneaux")
-
-    min_par_date = st.slider(
-        "Nombre minimal d'enfants par créneau",
-        min_value=1, max_value=10, value=4
-    )
-
-    max_par_date = st.slider(
-        "Nombre maximal d'enfants par créneau",
-        min_value=min_par_date, max_value=10, value=max(5, min_par_date)
-    )
-
+    min_par_date = st.slider("Nombre minimal d'enfants par créneau", 1, 10, 4)
+    max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_par_date, 10, max(5, min_par_date))
     total_creaneaux = len(df)
     places_totales = total_creaneaux * max_par_date
     occ_recommandee = round(places_totales / len(noms_uniques))
-    st.info(f"Total créneaux : {total_creaneaux}, Places totales : {places_totales} → Occurrence idéale par enfant ≈ {occ_recommandee}")
-    
     max_occ_global = st.number_input(
         "Nombre maximal d'occurrences par enfant (pour tous)",
-        min_value=1,
-        max_value=total_creaneaux,
-        value=occ_recommandee
+        1, total_creaneaux, occ_recommandee
     )
 
-# =====================================================
-# 4️⃣ BINÔMES
-# =====================================================
+# --- Binômes
 st.subheader("Binômes à ne pas séparer")
 if "binomes" not in st.session_state:
     st.session_state.binomes = []
@@ -91,29 +64,30 @@ if noms_uniques:
         enfant_a = st.selectbox("Enfant A", noms_uniques, key="a")
     with col2:
         enfant_b = st.selectbox("Enfant B", noms_uniques, key="b")
-
-    if (
-        enfant_a != enfant_b
-        and st.button("Ajouter le binôme")
-        and (enfant_a, enfant_b) not in st.session_state.binomes
-        and (enfant_b, enfant_a) not in st.session_state.binomes
-    ):
-        st.session_state.binomes.append((enfant_a, enfant_b))
-
-if st.session_state.binomes:
-    st.write("Binômes définis :")
-    for a, b in st.session_state.binomes:
-        st.write(f"- {a} + {b}")
+    if enfant_a != enfant_b and st.button("Ajouter le binôme"):
+        if (enfant_a, enfant_b) not in st.session_state.binomes and (enfant_b, enfant_a) not in st.session_state.binomes:
+            st.session_state.binomes.append((enfant_a, enfant_b))
 
 binomes = st.session_state.binomes
 
 # =====================================================
-# 5️⃣ RÉPARTITION AMÉLIORÉE
+# --- Fonction pour parser les dates françaises
 # =====================================================
+def parse_date_fr(date_str, default_year=2026):
+    # Exemple : "mercredi 7 janvier" → "7 janvier 2026"
+    parts = date_str.split()
+    day = parts[1]
+    month = parts[2]
+    try:
+        dt = datetime.strptime(f"{day} {month} {default_year}", "%d %B %Y")
+    except:
+        dt = pd.NaT
+    return dt
+
+# --- Répartition
 if st.button("Répartir les enfants"):
 
-    # ---- Préparer les créneaux
-    df["Date_dt"] = pd.to_datetime(df["Date"], dayfirst=True)
+    df["Date_dt"] = df["Date"].apply(parse_date_fr)
     df_sorted = df.sort_values("Date_dt").reset_index(drop=True)
 
     repartition = {}
@@ -121,25 +95,25 @@ if st.button("Répartir les enfants"):
     dernier_creneau = {nom: pd.Timestamp.min for nom in noms_uniques}
 
     for _, row in df_sorted.iterrows():
-        date = pd.to_datetime(row["Date"], dayfirst=True)
+        date = row["Date_dt"]
+        if pd.isna(date):
+            continue
         horaire = str(row["Horaires"]).strip()
         dispo = [n.strip() for n in str(row["Noms_dispos"]).split(";") if n.strip()]
         cle = f"{date.strftime('%d/%m/%Y')} | {horaire}"
         repartition[cle] = []
-
         deja_affectes = set()
 
-        # ---- Ajouter binômes disponibles
-        binomes_dispos = []
-        for a, b in binomes:
-            if (a in dispo and b in dispo
-                and compteur[a] < max_occ_global
-                and compteur[b] < max_occ_global
-                and len(repartition[cle]) <= max_par_date - 2
-                and (date - dernier_creneau[a]).days >= 14
-                and (date - dernier_creneau[b]).days >= 14
-            ):
-                binomes_dispos.append((a, b))
+        # --- Ajouter binômes
+        binomes_dispos = [
+            (a, b) for a, b in binomes
+            if a in dispo and b in dispo
+            and compteur[a] < max_occ_global
+            and compteur[b] < max_occ_global
+            and (date - dernier_creneau[a]).days >= 14
+            and (date - dernier_creneau[b]).days >= 14
+            and len(repartition[cle]) <= max_par_date - 2
+        ]
         random.shuffle(binomes_dispos)
         for a, b in binomes_dispos:
             repartition[cle].extend([a, b])
@@ -149,7 +123,7 @@ if st.button("Répartir les enfants"):
             dernier_creneau[b] = date
             deja_affectes.update([a, b])
 
-        # ---- Ajouter solos disponibles
+        # --- Ajouter solos
         solos_dispos = [
             n for n in dispo
             if n not in deja_affectes
@@ -164,12 +138,9 @@ if st.button("Répartir les enfants"):
                 dernier_creneau[n] = date
                 deja_affectes.add(n)
 
-        # ---- Vérifier min_par_date
+        # --- Vérification min_par_date
         if len(repartition[cle]) < min_par_date:
-            restants = [
-                n for n in noms_uniques
-                if n not in deja_affectes and compteur[n] < max_occ_global
-            ]
+            restants = [n for n in noms_uniques if n not in deja_affectes and compteur[n] < max_occ_global]
             random.shuffle(restants)
             for n in restants:
                 if len(repartition[cle]) < min_par_date:
@@ -177,53 +148,21 @@ if st.button("Répartir les enfants"):
                     compteur[n] += 1
                     dernier_creneau[n] = date
                     deja_affectes.add(n)
-                else:
-                    break
 
-    # ---- Tri final
+    # --- Tri final
     def cle_tri(cle_str):
         date_str, horaire_str = cle_str.split("|")
         try:
-            return (pd.to_datetime(date_str.strip(), dayfirst=True), horaire_str.strip())
+            return datetime.strptime(date_str.strip(), "%d/%m/%Y"), horaire_str.strip()
         except:
-            return (date_str.strip(), horaire_str.strip())
+            return datetime.max, horaire_str.strip()
 
     repartition_tri = dict(sorted(repartition.items(), key=cle_tri))
 
-    # =====================================================
-    # 6️⃣ AFFICHAGE
-    # =====================================================
-    st.subheader("Répartition finale (triée par date)")
+    # --- Affichage
+    st.subheader("Répartition finale")
     for cle, enfants in repartition_tri.items():
-        st.write(
-            f"{cle} : "
-            f"{', '.join(enfants) if enfants else 'Aucun'} "
-            f"({max_par_date - len(enfants)} place(s) restante(s))"
-        )
+        st.write(f"{cle} : {', '.join(enfants)} ({max_par_date - len(enfants)} place(s) restante(s))")
 
     st.subheader("Occurrences par enfant")
     st.write(dict(sorted(compteur.items())))
-
-    jamais_affectes = [nom for nom, c in compteur.items() if c == 0]
-    if jamais_affectes:
-        st.subheader("Enfants jamais affectés")
-        st.write(", ".join(jamais_affectes))
-
-    # =====================================================
-    # 7️⃣ EXPORT CSV
-    # =====================================================
-    export_df = pd.DataFrame([
-        {
-            "Date_Horaire": cle,
-            "Enfants_affectés": ";".join(enfants),
-            "Places_restantes": max_par_date - len(enfants)
-        }
-        for cle, enfants in repartition_tri.items()
-    ])
-    csv = export_df.to_csv(index=False, sep=";").encode("utf-8")
-    st.download_button(
-        "Télécharger la répartition CSV",
-        data=csv,
-        file_name="repartition.csv",
-        mime="text/csv"
-    )
