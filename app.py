@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import random
+from dateparser.search import search_dates
+import matplotlib.pyplot as plt
 
 st.title("Répartition égalitaire bénévoles / enfants (étalée)")
 
@@ -13,7 +15,6 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file:
-
     # Lecture CSV
     try:
         df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
@@ -39,7 +40,7 @@ if uploaded_file:
     # Détection automatique du séparateur (virgule ou point-virgule)
     sample_cell = str(df["Noms_dispos"].iloc[0]) if len(df) > 0 else ""
     separator = "," if "," in sample_cell else ";"
-    
+
     noms_uniques = sorted({
         n.strip()
         for cell in df["Noms_dispos"]
@@ -62,6 +63,7 @@ if uploaded_file:
     st.subheader("Paramètres des créneaux")
     min_par_date = st.slider("Nombre minimal d'enfants par créneau", min_value=1, max_value=10, value=4)
     max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_value=min_par_date, max_value=10, value=max(5, min_par_date))
+    delai_minimum = st.slider("Délai minimum entre deux créneaux pour un même enfant (jours)", min_value=1, max_value=14, value=7)
 
     # =====================================================
     # 4️⃣ OCCURRENCES MAXIMALES GLOBALES
@@ -114,33 +116,24 @@ if uploaded_file:
         # Initialisation
         compteur = {nom: 0 for nom in noms_uniques}
         affectations = {nom: [] for nom in noms_uniques}
-        DELAI_MINIMUM = 7
+        binomes_non_places = []
 
         # Parser les dates
-        mois_fr = {
-            'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
-            'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
-            'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
-        }
-        
         def parse_dt(row):
             try:
-                date_str = str(row['Date']).strip().lower()
+                date_str = str(row['Date']).strip()
                 horaire_str = str(row['Horaires']).strip()
-                
-                parts = date_str.split()
-                jour = int(parts[1]) if len(parts) > 1 else 1
-                mois_nom = parts[2] if len(parts) > 2 else 'janvier'
-                mois = mois_fr.get(mois_nom, 1)
-                
-                horaire_str = horaire_str.replace('h', ':00') if 'h' in horaire_str else horaire_str
-                heure = int(horaire_str.split(':')[0]) if ':' in horaire_str else 0
-                minute = int(horaire_str.split(':')[1]) if ':' in horaire_str and len(horaire_str.split(':')) > 1 else 0
-                
-                return pd.Timestamp(year=2026, month=mois, day=jour, hour=heure, minute=minute)
+                dates = search_dates(date_str, languages=['fr'])
+                if dates:
+                    dt = dates[0][1]
+                    if ':' in horaire_str:
+                        heure, minute = map(int, horaire_str.split(':'))
+                        dt = dt.replace(hour=heure, minute=minute)
+                    return dt
+                return pd.to_datetime("1900-01-01 00:00")
             except:
                 return pd.to_datetime("1900-01-01 00:00")
-        
+
         df_sorted = df.copy()
         df_sorted['dt'] = df_sorted.apply(parse_dt, axis=1)
         df_sorted = df_sorted.sort_values("dt")
@@ -152,9 +145,8 @@ if uploaded_file:
             horaire = str(row["Horaires"]).strip() or "00:00"
             dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
             dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
-            # Nettoyer et filtrer pour garder seulement les noms reconnus
             dispos = [n for n in dispos if n in compteur]
-            
+
             cle = f"{date} | {horaire}"
             creneaux_info.append({
                 'cle': cle,
@@ -166,21 +158,21 @@ if uploaded_file:
         # Algorithme par vagues
         vague = 0
         places_restantes_total = sum(max_par_date for _ in creneaux_info)
-        
+
         while vague < 50:
             vague += 1
             affectations_vague = 0
             creneaux_shuffled = creneaux_info.copy()
             random.shuffle(creneaux_shuffled)
-            
+
             for creneau in creneaux_shuffled:
                 if len(creneau['affectes']) >= max_par_date:
                     continue
-                
+
                 cle = creneau['cle']
                 date_horaire_dt = creneau['dt']
                 dispos = creneau['dispos']
-                
+
                 # BINÔMES
                 for a, b in binomes:
                     if (
@@ -193,13 +185,16 @@ if uploaded_file:
                     ):
                         min_a = min([(date_horaire_dt - d).days for d in affectations[a]] + [float('inf')])
                         min_b = min([(date_horaire_dt - d).days for d in affectations[b]] + [float('inf')])
-                        if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
+                        if min_a >= delai_minimum and min_b >= delai_minimum:
                             creneau['affectes'].extend([a, b])
                             compteur[a] += 1
                             compteur[b] += 1
                             affectations[a].append(date_horaire_dt)
                             affectations[b].append(date_horaire_dt)
                             affectations_vague += 2
+                        else:
+                            if (a, b) not in binomes_non_places:
+                                binomes_non_places.append((a, b))
 
                 # SOLO
                 candidats_solo = []
@@ -209,28 +204,28 @@ if uploaded_file:
                         and compteur[n] < max_occ_global
                     ):
                         distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
-                        if distance >= DELAI_MINIMUM:
+                        if distance >= delai_minimum:
                             candidats_solo.append(n)
-                
+
                 random.shuffle(candidats_solo)
-                
+
                 for nom in candidats_solo:
                     if len(creneau['affectes']) < max_par_date:
                         creneau['affectes'].append(nom)
                         compteur[nom] += 1
                         affectations[nom].append(date_horaire_dt)
                         affectations_vague += 1
-            
+
             if affectations_vague == 0:
                 break
-        
+
         # Compléter les créneaux sous le minimum
         for creneau in creneaux_info:
             if len(creneau['affectes']) < min_par_date:
                 candidats = [(n, compteur[n]) for n in creneau['dispos']
                            if n not in creneau['affectes'] and compteur[n] < max_occ_global]
                 candidats.sort(key=lambda x: x[1])
-                
+
                 for nom, _ in candidats:
                     if len(creneau['affectes']) < min_par_date:
                         creneau['affectes'].append(nom)
@@ -250,17 +245,28 @@ if uploaded_file:
                 f"({max_par_date - len(enfants)} place(s) restante(s))"
             )
 
+        # =====================================================
+        # 8️⃣ VISUALISATION
+        # =====================================================
         st.subheader("Occurrences par enfant")
-        compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
-        st.write(compteur_sorted)
-
-        jamais_affectes = [nom for nom, c in compteur.items() if c == 0]
-        if jamais_affectes:
-            st.subheader("Enfants jamais affectés")
-            st.write(", ".join(jamais_affectes))
+        fig, ax = plt.subplots()
+        ax.bar(compteur.keys(), compteur.values())
+        ax.set_xticklabels(compteur.keys(), rotation=90)
+        ax.set_ylabel("Nombre d'occurrences")
+        st.pyplot(fig)
 
         # =====================================================
-        # 8️⃣ EXPORT CSV
+        # 9️⃣ ALERTES
+        # =====================================================
+        jamais_affectes = [nom for nom, c in compteur.items() if c == 0]
+        if jamais_affectes:
+            st.warning("Enfants jamais affectés : " + ", ".join(jamais_affectes))
+
+        if binomes_non_places:
+            st.warning("Binômes non placés (délai ou max_occ_global) : " + ", ".join([f"{a}+{b}" for a, b in binomes_non_places]))
+
+        # =====================================================
+        # 10️⃣ EXPORT CSV
         # =====================================================
         export_df = pd.DataFrame([
             {
