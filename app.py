@@ -1,205 +1,139 @@
 import streamlit as st
 import pandas as pd
 import random
-import matplotlib.pyplot as plt
+from collections import defaultdict, Counter
 
-st.set_page_config(layout="wide")
-st.title("Répartition optimisée des enfants / bénévoles")
+st.title("Répartition enfants avec binômes et min/max équilibré")
 
-# =====================================================
-# 1️⃣ IMPORT DU CSV
-# =====================================================
+# -----------------------------
+# 1️⃣ Upload CSV de disponibilités
+# -----------------------------
 uploaded_file = st.file_uploader(
-    "Importer le CSV (Date ; Horaires ; Noms_dispos)",
+    "Importer le CSV (Excel FR – séparateur ;) avec colonnes Date,Horaires,Noms_dispos",
     type=["csv"]
 )
 
 if uploaded_file:
-    try:
-        df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
-    except Exception as e:
-        st.error(f"Erreur CSV : {e}")
-        st.stop()
+    df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8")
+    df["Noms_dispos"] = df["Noms_dispos"].apply(lambda x: x.split(";"))
 
-    df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
-    if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
-        st.error(f"Colonnes manquantes : {df.columns.tolist()}")
-        st.stop()
+    # Récupération de tous les enfants
+    all_children = set()
+    for lst in df["Noms_dispos"]:
+        all_children.update(lst)
+    all_children = sorted(list(all_children))
 
-    st.subheader("Aperçu du CSV")
-    st.dataframe(df.head(10))
+    st.write(f"Enfants détectés ({len(all_children)}) :", all_children)
 
-    # =====================================================
-    # 2️⃣ EXTRACTION DES ENFANTS
-    # =====================================================
-    sample_cell = str(df["Noms_dispos"].iloc[0])
-    separator = "," if "," in sample_cell else ";"
-    noms_uniques = sorted({
-        n.strip() for cell in df["Noms_dispos"] if pd.notna(cell) for n in str(cell).split(separator) if n.strip()
-    })
+    # -----------------------------
+    # 2️⃣ Paramètres
+    # -----------------------------
+    st.subheader("Paramètres généraux")
+    min_per_slot = st.number_input("Min enfants par créneau", min_value=1, max_value=10, value=4)
+    max_per_slot = st.number_input("Max enfants par créneau", min_value=1, max_value=10, value=5)
 
-    st.subheader("Enfants détectés")
-    st.write(noms_uniques)
-    st.info(f"Séparateur détecté : '{separator}'")
+    min_global = st.number_input("Min occurrences par enfant (global)", min_value=0, max_value=20, value=3)
+    max_global = st.number_input("Max occurrences par enfant (global)", min_value=1, max_value=20, value=6)
 
-    # =====================================================
-    # 3️⃣ PARAMÈTRES GÉNÉRAUX
-    # =====================================================
-    st.subheader("Paramètres de répartition")
-    col1, col2 = st.columns(2)
-    with col1:
-        min_par_date = st.slider("Min enfants par créneau", 1, 10, 4)
-        max_par_date = st.slider("Max enfants par créneau", min_par_date, 10, 5)
-    with col2:
-        delai_minimum = st.slider("Délai minimum entre deux créneaux (jours)", 1, 14, 7)
+    st.subheader("Binômes (inséparables)")
+    binomes_text = st.text_area(
+        "Entrez les binômes séparés par une virgule et un retour à la ligne pour chaque binôme, exemple :\nHugo,Théo\nMaïwenn,Sterenn",
+        height=100
+    )
+    binomes = []
+    for line in binomes_text.split("\n"):
+        parts = [x.strip() for x in line.split(",") if x.strip()]
+        if len(parts) >= 2:
+            binomes.append(parts)
 
-    # =====================================================
-    # 4️⃣ BINÔMES INSÉPARABLES
-    # =====================================================
-    st.subheader("Binômes inséparables")
-    if "binomes" not in st.session_state:
-        st.session_state.binomes = []
+    # Création d'un mapping enfant → binôme(s)
+    child_to_binome = {}
+    for b in binomes:
+        for child in b:
+            child_to_binome[child] = b
 
-    col1, col2 = st.columns(2)
-    with col1:
-        enfant_a = st.selectbox("Enfant A", noms_uniques, key="a")
-    with col2:
-        enfant_b = st.selectbox("Enfant B", noms_uniques, key="b")
-    if enfant_a != enfant_b:
-        if st.button("Ajouter le binôme"):
-            if (enfant_a, enfant_b) not in st.session_state.binomes and (enfant_b, enfant_a) not in st.session_state.binomes:
-                st.session_state.binomes.append((enfant_a, enfant_b))
+    # -----------------------------
+    # 3️⃣ Génération planning
+    # -----------------------------
+    def generate_schedule(df, min_per_slot, max_per_slot, min_global, max_global):
+        schedule = []
+        # Compteur global des affectations par enfant
+        global_counter = Counter({child: 0 for child in all_children})
 
-    if st.session_state.binomes:
-        st.write("Binômes définis :")
-        for a, b in st.session_state.binomes:
-            st.write(f"- {a} + {b}")
+        # On mélange les créneaux pour éviter les patterns fixes
+        df_shuffled = df.sample(frac=1, random_state=42).reset_index(drop=True)
 
-    # =====================================================
-    # 5️⃣ PARAMÈTRES MIN/MAX PAR ENFANT
-    # =====================================================
-    st.subheader("Min/max global par enfant")
-    min_occ_default = 3
-    max_occ_default = 6
-    col1, col2 = st.columns(2)
-    with col1:
-        min_occ_par_enfant = st.number_input("Min présences par enfant", 0, 20, min_occ_default)
-    with col2:
-        max_occ_par_enfant = st.number_input("Max présences par enfant", min_occ_par_enfant, 20, max_occ_default)
+        for idx, row in df_shuffled.iterrows():
+            date, time, dispo = row["Date"], row["Horaires"], row["Noms_dispos"]
+            dispo = set(dispo)
 
-    dispo_totales = {nom: sum(df["Noms_dispos"].apply(lambda x: nom in str(x).split(separator))) for nom in noms_uniques}
-    st.write("Disponibilités max selon CSV :", dispo_totales)
+            # Enfants déjà atteignant max global
+            dispo = [c for c in dispo if global_counter[c] < max_global]
 
-    # =====================================================
-    # 6️⃣ PARSING DES DATES
-    # =====================================================
-    mois_fr = {'janvier':1,'février':2,'fevrier':2,'mars':3}
+            # Pour gérer les binômes : si un membre est dispo, il faut que tous les binômes soient dispo
+            def binome_check(c):
+                if c in child_to_binome:
+                    return all(member in dispo and global_counter[member] < max_global for member in child_to_binome[c])
+                return True
 
-    def parse_dt(row):
-        try:
-            parts = str(row['Date']).strip().lower().split()
-            if len(parts)<3: return pd.Timestamp("1900-01-01")
-            day = int(parts[1])
-            month = mois_fr.get(parts[2],1)
-            year = 2026
-            hour = int(str(row['Horaires']).split('h')[0]) if 'h' in str(row['Horaires']) else 0
-            return pd.Timestamp(year=year, month=month, day=day, hour=hour)
-        except:
-            return pd.Timestamp("1900-01-01")
+            dispo = [c for c in dispo if binome_check(c)]
 
-    df['dt'] = df.apply(parse_dt, axis=1)
-    df_sorted = df.sort_values("dt")
+            # Priorité aux enfants les moins affectés globalement
+            dispo.sort(key=lambda x: global_counter[x])
 
-    # =====================================================
-    # 7️⃣ LANCEMENT DE LA RÉPARTITION
-    # =====================================================
-    if st.button("Lancer la répartition optimisée"):
-        # Créneaux
-        creneaux_info = []
-        for _, row in df_sorted.iterrows():
-            if row['dt'] == pd.Timestamp("1900-01-01"): continue
-            dispos = [n.strip() for n in str(row["Noms_dispos"]).split(separator) if n.strip() in noms_uniques]
-            creneaux_info.append({
-                'cle': f"{row['Date']} | {row['Horaires']}",
-                'dt': row['dt'],
-                'dispos': dispos,
-                'affectes': []
+            slot = []
+            for child in dispo:
+                # Ajouter le binôme complet si nécessaire
+                if child in slot:
+                    continue
+                if child in child_to_binome:
+                    members = child_to_binome[child]
+                    if all(member not in slot for member in members):
+                        if len(slot) + len(members) <= max_per_slot:
+                            slot.extend(members)
+                            for m in members:
+                                global_counter[m] += 1
+                else:
+                    if len(slot) < max_per_slot:
+                        slot.append(child)
+                        global_counter[child] += 1
+
+                if len(slot) >= max_per_slot:
+                    break
+
+            # Vérifier min per slot
+            if len(slot) < min_per_slot:
+                # remplir avec les enfants encore dispo
+                for child in dispo:
+                    if child not in slot and len(slot) < min_per_slot:
+                        slot.append(child)
+                        global_counter[child] += 1
+
+            schedule.append({
+                "Date": date,
+                "Horaires": time,
+                "Enfants": slot,
+                "Places_restantes": max_per_slot - len(slot)
             })
 
-        # Compteur par enfant
-        compteur = {nom: 0 for nom in noms_uniques}
-        affectations = {nom: [] for nom in noms_uniques}
+        return schedule
 
-        # Boucle d’affectation
-        for _ in range(50):  # itérations pour équilibrer
-            for creneau in creneaux_info:
-                if len(creneau['affectes']) >= max_par_date: continue
-
-                # Affecter binômes en priorité
-                for a,b in st.session_state.binomes:
-                    if (a in creneau['dispos'] and b in creneau['dispos'] and
-                        a not in creneau['affectes'] and b not in creneau['affectes'] and
-                        compteur[a]<max_occ_par_enfant and compteur[b]<max_occ_par_enfant):
-                        last_a = affectations[a][-1] if affectations[a] else pd.Timestamp("1900-01-01")
-                        last_b = affectations[b][-1] if affectations[b] else pd.Timestamp("1900-01-01")
-                        if (creneau['dt']-last_a).days>=delai_minimum and (creneau['dt']-last_b).days>=delai_minimum:
-                            creneau['affectes'].extend([a,b])
-                            compteur[a]+=1
-                            compteur[b]+=1
-                            affectations[a].append(creneau['dt'])
-                            affectations[b].append(creneau['dt'])
-
-                # Affecter autres enfants
-                candidats = sorted(
-                    [n for n in creneau['dispos'] if n not in creneau['affectes'] and compteur[n]<max_occ_par_enfant],
-                    key=lambda x: compteur[x]
-                )
-                for nom in candidats:
-                    if len(creneau['affectes'])>=max_par_date: break
-                    last = affectations[nom][-1] if affectations[nom] else pd.Timestamp("1900-01-01")
-                    if (creneau['dt']-last).days>=delai_minimum:
-                        creneau['affectes'].append(nom)
-                        compteur[nom]+=1
-                        affectations[nom].append(creneau['dt'])
-
-        # =====================================================
-        # 8️⃣ AFFICHAGE DU PLANNING
-        # =====================================================
+    if st.button("Générer le planning équilibré"):
+        schedule = generate_schedule(df, min_per_slot, max_per_slot, min_global, max_global)
         st.subheader("Planning final")
-        for creneau in creneaux_info:
-            st.write(f"{creneau['cle']} → {', '.join(creneau['affectes'])} ({max_par_date-len(creneau['affectes'])} place(s))")
+        for s in schedule:
+            st.write(f"{s['Date']} | {s['Horaires']} → {', '.join(s['Enfants'])} ({s['Places_restantes']} place(s))")
 
-        # =====================================================
-        # 9️⃣ STATISTIQUES
-        # =====================================================
-        st.subheader("Statistiques par enfant")
-        moyenne = sum(compteur.values())/len(compteur)
-        st.write(f"Moyenne présences/enfant : {moyenne:.1f}")
-        sous = [n for n,c in compteur.items() if c<min_occ_par_enfant]
-        sur = [n for n,c in compteur.items() if c>max_occ_par_enfant]
-        if sous: st.warning(f"Enfants sous-représentés : {', '.join(sous)}")
-        if sur: st.warning(f"Enfants sur-représentés : {', '.join(sur)}")
+        # Statistiques globales
+        st.subheader("Occurrences par enfant")
+        total_counter = Counter()
+        for s in schedule:
+            for c in s['Enfants']:
+                total_counter[c] += 1
+        df_counter = pd.DataFrame({"Enfant": list(total_counter.keys()), "Occurrences": list(total_counter.values())})
+        st.dataframe(df_counter.sort_values("Occurrences"))
 
-        fig, ax = plt.subplots()
-        ax.bar(compteur.keys(), compteur.values())
-        ax.axhline(y=moyenne, color='g', linestyle='--', label=f"Moyenne ({moyenne:.1f})")
-        ax.axhline(y=min_occ_par_enfant, color='r', linestyle='--', label=f"Min ({min_occ_par_enfant})")
-        ax.axhline(y=max_occ_par_enfant, color='orange', linestyle='--', label=f"Max ({max_occ_par_enfant})")
-        ax.set_xticklabels(compteur.keys(), rotation=90)
-        ax.set_ylabel("Présences")
-        ax.legend()
-        st.pyplot(fig)
-
-        # Export CSV
-        export_df = pd.DataFrame([{
-            "Date_Horaire": c['cle'],
-            "Enfants_affectés": ", ".join(c['affectes']),
-            "Places_restantes": max_par_date - len(c['affectes'])
-        } for c in creneaux_info])
-        csv = export_df.to_csv(index=False, sep=";").encode("utf-8")
-        st.download_button(
-            "Télécharger le planning CSV",
-            data=csv,
-            file_name="planning_optimise.csv",
-            mime="text/csv"
-        )
+        # Option CSV export
+        csv = pd.DataFrame(schedule)
+        csv["Enfants"] = csv["Enfants"].apply(lambda x: ";".join(x))
+        st.download_button("Exporter CSV", csv.to_csv(index=False, sep=";"), "planning.csv", "text/csv")
