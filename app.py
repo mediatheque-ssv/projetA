@@ -167,30 +167,44 @@ if uploaded_file:
                     affectations[n].append(dt)
                     occ_par_mois[n][mois] = occ_par_mois[n].get(mois, 0) + 1
 
-        # =====================================================
-        # 7️⃣ TRI DATE + HORAIRE
-        # =====================================================
-        def cle_tri(cle):
-            date_str, heure_str = cle.split("|")
-            d = pd.to_datetime(date_str.strip(), dayfirst=True, errors="coerce")
-            h = pd.to_datetime(heure_str.strip(), format="%H:%M", errors="coerce")
-            return (d, h)
+# =====================================================
+# 7️⃣ TRI DATE + HORAIRE (ULTRA ROBUSTE)
+# =====================================================
+def cle_tri(cle):
+    cle = str(cle)
 
-        repartition = dict(sorted(repartition.items(), key=cle_tri))
+    # séparation tolérante
+    parts = cle.split("|", 1)
 
-        # =====================================================
-        # 8️⃣ AFFICHAGE
-        # =====================================================
-        st.subheader("Répartition finale")
+    if len(parts) == 2:
+        date_str = parts[0].strip()
+        heure_str = parts[1].strip()
+    else:
+        date_str = parts[0].strip()
+        heure_str = "00:00"
 
-        for cle, enfants in repartition.items():
-            st.write(
-                f"{cle} : {', '.join(enfants) if enfants else 'Aucun'} "
-                f"({len(enfants)} enfant(s))"
-            )
+    # parsing date
+    date_dt = pd.to_datetime(
+        date_str,
+        dayfirst=True,
+        errors="coerce"
+    )
+    if pd.isna(date_dt):
+        date_dt = pd.to_datetime("1900-01-01")
 
-        st.subheader("Occurrences par enfant")
-        st.write(dict(sorted(compteur.items())))
+    # parsing heure
+    heure_dt = pd.to_datetime(
+        heure_str,
+        format="%H:%M",
+        errors="coerce"
+    )
+    if pd.isna(heure_dt):
+        heure_dt = pd.to_datetime("00:00", format="%H:%M")
+
+    return (date_dt, heure_dt)
+
+repartition = dict(sorted(repartition.items(), key=cle_tri))
+
 
         # =====================================================
         # 9️⃣ EXPORT CSV
