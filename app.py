@@ -172,6 +172,7 @@ if uploaded_file:
         # 7️⃣ TRI PAR DATE + HORAIRE (robuste)
         # =====================================================
         def cle_tri(cle_str):
+            cle_str = str(cle_str)  # ⚡ Force string
             parts = cle_str.split("|")
             if len(parts) != 2:
                 date_str, horaire_str = "1900-01-01", "00:00"
