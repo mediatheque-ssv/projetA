@@ -115,7 +115,11 @@ if uploaded_file:
         # Trier CSV par datetime
         def parse_dt(row):
             try:
-                return pd.to_datetime(f"{row['Date']} {row['Horaires']}", dayfirst=True)
+                date_str = str(row['Date']).strip()
+                horaire_str = str(row['Horaires']).strip()
+                # Convertir "10h" en "10:00"
+                horaire_str = horaire_str.replace('h', ':00') if 'h' in horaire_str else horaire_str
+                return pd.to_datetime(f"{date_str} {horaire_str}", dayfirst=True)
             except:
                 return pd.to_datetime("1900-01-01 00:00")
         
