@@ -88,7 +88,6 @@ binomes = st.session_state.binomes
 # 5️⃣ PARSING DES DATES
 # =====================================================
 def parse_date_fr(date_str, default_year=2026):
-    # Retire le jour de la semaine
     parts = date_str.split()
     if len(parts) >= 3:
         day = parts[1]
@@ -105,11 +104,17 @@ df["Date_dt"] = df["Date"].apply(parse_date_fr)
 df_sorted = df.sort_values("Date_dt").reset_index(drop=True)
 
 # =====================================================
-# 6️⃣ RÉPARTITION
+# 6️⃣ INITIALISATION DE LA RÉPARTITION
+# =====================================================
+if "repartition_calc" not in st.session_state:
+    st.session_state.repartition_calc = None
+
+# =====================================================
+# 7️⃣ RÉPARTITION
 # =====================================================
 if st.button("Répartir les enfants"):
 
-    repartition = {}
+    repartition_calc = {}
     compteur = {nom: 0 for nom in noms_uniques}
     dernier_creneau = {nom: pd.Timestamp.min for nom in noms_uniques}
 
@@ -120,7 +125,7 @@ if st.button("Répartir les enfants"):
         horaire = str(row["Horaires"]).strip()
         dispo = [n.strip() for n in str(row["Noms_dispos"]).split(";") if n.strip()]
         cle = f"{date.strftime('%d/%m/%Y')} | {horaire}"
-        repartition[cle] = []
+        repartition_calc[cle] = []
         deja_affectes = set()
 
         # --- BINÔMES
@@ -131,11 +136,11 @@ if st.button("Répartir les enfants"):
             and compteur[b] < max_occ_global
             and (date - dernier_creneau[a]).days >= 14
             and (date - dernier_creneau[b]).days >= 14
-            and len(repartition[cle]) <= max_par_date - 2
+            and len(repartition_calc[cle]) <= max_par_date - 2
         ]
         random.shuffle(binomes_dispos)
         for a, b in binomes_dispos:
-            repartition[cle].extend([a, b])
+            repartition_calc[cle].extend([a, b])
             compteur[a] += 1
             compteur[b] += 1
             dernier_creneau[a] = date
@@ -151,26 +156,32 @@ if st.button("Répartir les enfants"):
         ]
         solos_dispos.sort(key=lambda x: compteur[x])
         for n in solos_dispos:
-            if len(repartition[cle]) < max_par_date:
-                repartition[cle].append(n)
+            if len(repartition_calc[cle]) < max_par_date:
+                repartition_calc[cle].append(n)
                 compteur[n] += 1
                 dernier_creneau[n] = date
                 deja_affectes.add(n)
 
         # --- Vérification min_par_date
-        if len(repartition[cle]) < min_par_date:
+        if len(repartition_calc[cle]) < min_par_date:
             restants = [n for n in noms_uniques if n not in deja_affectes and compteur[n] < max_occ_global]
             random.shuffle(restants)
             for n in restants:
-                if len(repartition[cle]) < min_par_date:
-                    repartition[cle].append(n)
+                if len(repartition_calc[cle]) < min_par_date:
+                    repartition_calc[cle].append(n)
                     compteur[n] += 1
                     dernier_creneau[n] = date
                     deja_affectes.add(n)
 
-    # =====================================================
-    # 7️⃣ TRI FINAL
-    # =====================================================
+    st.session_state.repartition_calc = (repartition_calc, compteur)
+
+# =====================================================
+# 8️⃣ AFFICHAGE DE LA RÉPARTITION
+# =====================================================
+if st.session_state.repartition_calc:
+    repartition_tri, compteur = st.session_state.repartition_calc
+
+    # Tri final
     def cle_tri(cle_str):
         date_str, horaire_str = cle_str.split("|")
         try:
@@ -178,11 +189,8 @@ if st.button("Répartir les enfants"):
         except:
             return datetime.max, horaire_str.strip()
 
-    repartition_tri = dict(sorted(repartition.items(), key=cle_tri))
+    repartition_tri = dict(sorted(repartition_tri.items(), key=cle_tri))
 
-    # =====================================================
-    # 8️⃣ AFFICHAGE
-    # =====================================================
     st.subheader("Répartition finale")
     for cle, enfants in repartition_tri.items():
         st.write(f"{cle} : {', '.join(enfants)} ({max_par_date - len(enfants)} place(s) restante(s))")
