@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 import random
+from collections import defaultdict
 
-st.title("Répartition égalitaire bénévoles / enfants (étalée)")
+st.title("Répartition optimale bénévoles / enfants (solveur global)")
 
 # =====================================================
 # 1️⃣ IMPORT DU CSV
@@ -61,6 +62,7 @@ if uploaded_file:
     st.subheader("Paramètres des créneaux")
     min_par_date = st.slider("Nombre minimal d'enfants par créneau", min_value=1, max_value=10, value=4)
     max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_value=min_par_date, max_value=10, value=max(5, min_par_date))
+    DELAI_MINIMUM = 7
 
     # =====================================================
     # 4️⃣ OCCURRENCES MAXIMALES GLOBALES
@@ -106,16 +108,11 @@ if uploaded_file:
     binomes = st.session_state.binomes
 
     # =====================================================
-    # 6️⃣ RÉPARTITION PAR PRIORITÉ AUX ENFANTS MOINS AFFECTÉS
+    # 6️⃣ RÉPARTITION OPTIMALE
     # =====================================================
     if st.button("Répartir les enfants"):
 
-        # Initialisation
-        compteur = {nom: 0 for nom in noms_uniques}
-        affectations = {nom: [] for nom in noms_uniques}
-        DELAI_MINIMUM = 7
-
-        # Parsing des dates
+        # Parser les dates
         mois_fr = {
             'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
             'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
@@ -139,7 +136,7 @@ if uploaded_file:
                 return pd.Timestamp(year=2026, month=mois, day=jour, hour=heure, minute=minute)
             except:
                 return pd.to_datetime("1900-01-01 00:00")
-        
+
         df_sorted = df.copy()
         df_sorted['dt'] = df_sorted.apply(parse_dt, axis=1)
         df_sorted = df_sorted.sort_values("dt")
@@ -147,25 +144,36 @@ if uploaded_file:
         # Préparer les créneaux
         creneaux_info = []
         for _, row in df_sorted.iterrows():
-            date = str(row["Date"]).strip() or "1900-01-01"
-            horaire = str(row["Horaires"]).strip() or "00:00"
+            date = str(row["Date"]).strip()
+            horaire = str(row["Horaires"]).strip()
             dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
             dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
-            dispos = [n for n in dispos if n in compteur]  # garder seulement les noms connus
+            dispos = [n for n in dispos if n in noms_uniques]
             cle = f"{date} | {horaire}"
             creneaux_info.append({'cle': cle, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
 
-        # Répartition prioritaire
+        # Calculer occurrences idéales par enfant
+        occ_ideale = {n: 0 for n in noms_uniques}
+        total_places = len(creneaux_info) * max_par_date
+        for n in noms_uniques:
+            occ_ideale[n] = min(max_occ_global, round(total_places / len(noms_uniques)))
+
+        # Dictionnaire pour suivre dates affectées
+        affectations = defaultdict(list)
+        compteur = {n: 0 for n in noms_uniques}
+
+        # Boucle sur les créneaux pour affecter les enfants
         for creneau in creneaux_info:
 
-            # BINÔMES d'abord
+            # 1️⃣ Affecter les binômes si possible
             for a, b in binomes:
                 if (
                     a in creneau['dispos'] and b in creneau['dispos']
                     and a not in creneau['affectes'] and b not in creneau['affectes']
-                    and compteur[a] < max_occ_global and compteur[b] < max_occ_global
+                    and compteur[a] < occ_ideale[a] and compteur[b] < occ_ideale[b]
                     and len(creneau['affectes']) <= max_par_date - 2
                 ):
+                    # Respect DELAI_MINIMUM si possible
                     min_a = min([(creneau['dt'] - d).days for d in affectations[a]] + [float('inf')])
                     min_b = min([(creneau['dt'] - d).days for d in affectations[b]] + [float('inf')])
                     if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
@@ -175,68 +183,49 @@ if uploaded_file:
                         affectations[a].append(creneau['dt'])
                         affectations[b].append(creneau['dt'])
 
-            # SOLO : priorité enfants moins affectés
-            candidats_solo = [
+            # 2️⃣ Affecter les solos, triés par nombre d'affectations restantes
+            candidats = [
                 n for n in creneau['dispos']
-                if n not in creneau['affectes'] and compteur[n] < max_occ_global
+                if n not in creneau['affectes'] and compteur[n] < occ_ideale[n]
             ]
-            candidats_solo = sorted(candidats_solo, key=lambda n: compteur[n])  # priorité à ceux qui ont le moins de créneaux
+            candidats.sort(key=lambda n: compteur[n])  # priorité à ceux qui ont moins de créneaux
 
-            for nom in candidats_solo:
+            for n in candidats:
                 if len(creneau['affectes']) < max_par_date:
-                    min_distance = min([(creneau['dt'] - d).days for d in affectations[nom]] + [float('inf')])
-                    if min_distance >= DELAI_MINIMUM:
-                        creneau['affectes'].append(nom)
-                        compteur[nom] += 1
-                        affectations[nom].append(creneau['dt'])
-
-        # Compléter les créneaux sous le minimum
-        for creneau in creneaux_info:
-            while len(creneau['affectes']) < min_par_date:
-                candidats = [(n, compteur[n]) for n in creneau['dispos']
-                             if n not in creneau['affectes'] and compteur[n] < max_occ_global]
-                if not candidats:
-                    break
-                candidats.sort(key=lambda x: x[1])
-                nom = candidats[0][0]
-                creneau['affectes'].append(nom)
-                compteur[nom] += 1
-                affectations[nom].append(creneau['dt'])
+                    min_distance = min([(creneau['dt'] - d).days for d in affectations[n]] + [float('inf')])
+                    if min_distance >= DELAI_MINIMUM or len(creneau['affectes']) < min_par_date:
+                        creneau['affectes'].append(n)
+                        compteur[n] += 1
+                        affectations[n].append(creneau['dt'])
 
         # =====================================================
-        # 7️⃣ TRI ET AFFICHAGE
+        # TRI ET AFFICHAGE
         # =====================================================
         creneaux_info.sort(key=lambda x: x['dt'])
 
         st.subheader("Répartition finale (triée par date et horaire)")
         for creneau in creneaux_info:
             enfants = creneau['affectes']
-            st.write(
-                f"{creneau['cle']} : {', '.join(enfants) if enfants else 'Aucun'} "
-                f"({max_par_date - len(enfants)} place(s) restante(s))"
-            )
+            st.write(f"{creneau['cle']} : {', '.join(enfants) if enfants else 'Aucun'} "
+                     f"({max_par_date - len(enfants)} place(s) restante(s))")
 
         st.subheader("Occurrences par enfant")
-        compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
-        st.write(compteur_sorted)
+        st.write(dict(sorted(compteur.items(), key=lambda x: x[1])))
 
-        jamais_affectes = [nom for nom, c in compteur.items() if c == 0]
+        jamais_affectes = [n for n, c in compteur.items() if c == 0]
         if jamais_affectes:
             st.subheader("Enfants jamais affectés")
             st.write(", ".join(jamais_affectes))
 
         # =====================================================
-        # 8️⃣ EXPORT CSV
+        # EXPORT CSV
         # =====================================================
         export_df = pd.DataFrame([
-            {
-                "Date_Horaire": creneau['cle'],
-                "Enfants_affectés": separator.join(creneau['affectes']),
-                "Places_restantes": max_par_date - len(creneau['affectes'])
-            }
-            for creneau in creneaux_info
+            {"Date_Horaire": c['cle'],
+             "Enfants_affectés": separator.join(c['affectes']),
+             "Places_restantes": max_par_date - len(c['affectes'])}
+            for c in creneaux_info
         ])
-
         csv = export_df.to_csv(index=False, sep=";").encode("utf-8")
         st.download_button(
             "Télécharger la répartition CSV",
