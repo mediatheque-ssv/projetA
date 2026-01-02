@@ -1,221 +1,40 @@
-import streamlit as st
-import pandas as pd
-import random
-import matplotlib.pyplot as plt
+Répartition optimisée
+mercredi 7 janvier | 10h : Maïwenn, Sterenn, Cléo, Théo, Jade (0 place(s) restante(s))
 
-st.title("Répartition égalitaire bénévoles / enfants (optimisée)")
+mercredi 7 janvier | 15h : Alba, Eva, Manuela, Soline, Lise (0 place(s) restante(s))
 
-# =====================================================
-# 1️⃣ IMPORT DU CSV
-# =====================================================
-uploaded_file = st.file_uploader(
-    "Importer le CSV (Date ; Horaires ; Noms_dispos)",
-    type=["csv"]
-)
+samedi 10 janvier | 10h : Achille, Anouk, Loreline, Louise, Magali (0 place(s) restante(s))
 
-if uploaded_file:
-    try:
-        df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
-    except Exception as e:
-        st.error(f"Erreur de lecture du CSV : {e}")
-        st.stop()
+mercredi 14 janvier | 10h : Maïwenn, Sterenn, Adrien, Hugo, Gwénaëlle (0 place(s) restante(s))
 
-    df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
+mercredi 14 janvier | 15h : Alba, Eva, Lilou, Séléna, Manuela (0 place(s) restante(s))
 
-    if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
-        st.error(f"Colonnes manquantes. Attendu : Date, Horaires, Noms_dispos. Trouvé : {df.columns.tolist()}")
-        st.stop()
+mercredi 21 janvier | 10h : Romane, Léa, Cléo, Théo, Jade (0 place(s) restante(s))
 
-    st.subheader("Aperçu du CSV")
-    st.dataframe(df.head())
+mercredi 21 janvier | 15h : Loreline, Soline, Lise, Lilou, Séléna (0 place(s) restante(s))
 
-    # =====================================================
-    # 2️⃣ EXTRACTION DES NOMS
-    # =====================================================
-    sample_cell = str(df["Noms_dispos"].iloc[0]) if len(df) > 0 else ""
-    separator = "," if "," in sample_cell else ";"
+samedi 24 janvier | 10h : Achille, Anouk, Adélie, Louise, Magali (0 place(s) restante(s))
 
-    noms_uniques = sorted({
-        n.strip()
-        for cell in df["Noms_dispos"]
-        if pd.notna(cell)
-        for n in str(cell).split(separator)
-        if n.strip()
-    })
+mercredi 28 janvier | 10h : Léa, Adrien, Hugo, Gwénaëlle (1 place(s) restante(s))
 
-    st.subheader("Enfants détectés")
-    st.write(noms_uniques)
-    st.info(f"Séparateur détecté : '{separator}'")
+mercredi 28 janvier | 15h : Aucun (5 place(s) restante(s))
 
-    # =====================================================
-    # 3️⃣ PARAMÈTRES
-    # =====================================================
-    st.subheader("Paramètres")
-    col1, col2 = st.columns(2)
-    with col1:
-        min_par_date = st.slider("Min enfants/créneau", 1, 10, 4)
-        max_par_date = st.slider("Max enfants/créneau", min_par_date, 10, 5)
-    with col2:
-        delai_minimum = st.slider("Délai min entre 2 créneaux (jours)", 1, 14, 7)
-        max_occ_global = st.number_input("Max occurrences/enfant", 1, len(df), min(10, len(df)//len(noms_uniques)+2))
+mercredi 4 février | 10h : Romane (4 place(s) restante(s))
 
-    # =====================================================
-    # 4️⃣ BINÔMES
-    # =====================================================
-    st.subheader("Binômes à ne pas séparer")
-    if "binomes" not in st.session_state:
-        st.session_state.binomes = []
+samedi 7 février | 10h : Adélie (4 place(s) restante(s))
 
-    col1, col2 = st.columns(2)
-    with col1:
-        enfant_a = st.selectbox("Enfant A", noms_uniques, key="a")
-    with col2:
-        enfant_b = st.selectbox("Enfant B", noms_uniques, key="b")
+mercredi 11 février | 10h : Aucun (5 place(s) restante(s))
 
-    if enfant_a != enfant_b and st.button("Ajouter binôme") and (enfant_a, enfant_b) not in st.session_state.binomes and (enfant_b, enfant_a) not in st.session_state.binomes:
-        st.session_state.binomes.append((enfant_a, enfant_b))
+mercredi 11 février | 15h : Aucun (5 place(s) restante(s))
 
-    if st.session_state.binomes:
-        st.write("Binômes définis :")
-        for a, b in st.session_state.binomes:
-            st.write(f"- {a} + {b}")
+mercredi 4 mars | 10h : Aucun (5 place(s) restante(s))
 
-    # =====================================================
-    # 5️⃣ ALGORITHME DE RÉPARTITION
-    # =====================================================
-    if st.button("Lancer la répartition optimisée"):
+mercredi 4 mars | 15h : Aucun (5 place(s) restante(s))
 
-        # Initialisation
-        compteur = {nom: 0 for nom in noms_uniques}
-        affectations = {nom: [] for nom in noms_uniques}
-        binomes_non_places = []
+mercredi 11 mars | 10h : Aucun (5 place(s) restante(s))
 
-        # Parsing des dates (format : "mercredi 7 janvier | 10h")
-        mois_fr = {
-            'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4, 'mai': 5, 'juin': 6,
-            'juillet': 7, 'août': 8, 'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
-        }
+mercredi 11 mars | 15h : Aucun (5 place(s) restante(s))
 
-        def parse_dt(row):
-            try:
-                date_str = str(row['Date']).strip().lower()
-                horaire_str = str(row['Horaires']).strip()
-                parts = date_str.split()
-                jour = int(parts[1])
-                mois = mois_fr[parts[2]]
-                annee = 2026
-                heure = int(horaire_str.split('h')[0]) if 'h' in horaire_str else 0
-                return pd.Timestamp(year=annee, month=mois, day=jour, hour=heure)
-            except:
-                return pd.to_datetime("1900-01-01")
+mercredi 18 mars | 10h : Aucun (5 place(s) restante(s))
 
-        df_sorted = df.copy()
-        df_sorted['dt'] = df_sorted.apply(parse_dt, axis=1)
-        df_sorted = df_sorted.sort_values("dt")
-
-        # Préparation des créneaux
-        creneaux_info = []
-        for _, row in df_sorted.iterrows():
-            date = str(row["Date"]).strip()
-            horaire = str(row["Horaires"]).strip()
-            dispos = [n.strip() for n in str(row["Noms_dispos"]).split(separator) if n.strip() and n.strip() in noms_uniques]
-            creneaux_info.append({
-                'cle': f"{date} | {horaire}",
-                'dt': row['dt'],
-                'dispos': dispos,
-                'affectes': []
-            })
-
-        # Algorithme par vagues avec rééquilibrage
-        for _ in range(50):  # Max 50 vagues
-            for creneau in creneaux_info:
-                if len(creneau['affectes']) >= max_par_date:
-                    continue
-
-                # 1. Traitement des binômes
-                for a, b in st.session_state.binomes:
-                    if (a in creneau['dispos'] and b in creneau['dispos'] and
-                        a not in creneau['affectes'] and b not in creneau['affectes'] and
-                        compteur[a] < max_occ_global and compteur[b] < max_occ_global and
-                        len(creneau['affectes']) <= max_par_date - 2):
-
-                        last_a = affectations[a][-1] if affectations[a] else pd.Timestamp("1900-01-01")
-                        last_b = affectations[b][-1] if affectations[b] else pd.Timestamp("1900-01-01")
-                        if (creneau['dt'] - last_a).days >= delai_minimum and (creneau['dt'] - last_b).days >= delai_minimum:
-                            creneau['affectes'].extend([a, b])
-                            compteur[a] += 1
-                            compteur[b] += 1
-                            affectations[a].append(creneau['dt'])
-                            affectations[b].append(creneau['dt'])
-
-                # 2. Affectation solo (priorité aux moins affectés)
-                candidats = sorted(
-                    [n for n in creneau['dispos'] if n not in creneau['affectes'] and compteur[n] < max_occ_global],
-                    key=lambda x: compteur[x]
-                )
-                for nom in candidats:
-                    if len(creneau['affectes']) >= max_par_date:
-                        break
-                    last = affectations[nom][-1] if affectations[nom] else pd.Timestamp("1900-01-01")
-                    if (creneau['dt'] - last).days >= delai_minimum:
-                        creneau['affectes'].append(nom)
-                        compteur[nom] += 1
-                        affectations[nom].append(creneau['dt'])
-
-        # 3. Remplissage forcé des créneaux sous le minimum
-        for creneau in creneaux_info:
-            if len(creneau['affectes']) < min_par_date:
-                candidats = sorted(
-                    [n for n in creneau['dispos'] if n not in creneau['affectes'] and compteur[n] < max_occ_global],
-                    key=lambda x: compteur[x]
-                )
-                for nom in candidats:
-                    if len(creneau['affectes']) >= max_par_date:
-                        break
-                    last = affectations[nom][-1] if affectations[nom] else pd.Timestamp("1900-01-01")
-                    if (creneau['dt'] - last).days >= delai_minimum:
-                        creneau['affectes'].append(nom)
-                        compteur[nom] += 1
-                        affectations[nom].append(creneau['dt'])
-
-        # =====================================================
-        # 6️⃣ AFFICHAGE DES RÉSULTATS
-        # =====================================================
-        st.subheader("Répartition optimisée")
-        for creneau in sorted(creneaux_info, key=lambda x: x['dt']):
-            st.write(f"{creneau['cle']} : {', '.join(creneau['affectes']) if creneau['affectes'] else 'Aucun'} ({max_par_date - len(creneau['affectes'])} place(s) restante(s))")
-
-        # Statistiques
-        st.subheader("Statistiques")
-        moyenne = sum(compteur.values()) / len(compteur)
-        st.write(f"Moyenne d'affectations/enfant : {moyenne:.1f}")
-        sous_representes = [n for n, c in compteur.items() if c < moyenne - 1]
-        sur_representes = [n for n, c in compteur.items() if c > moyenne + 1]
-        if sous_representes:
-            st.warning(f"Enfants sous-représentés : {', '.join(sous_representes)}")
-        if sur_representes:
-            st.warning(f"Enfants sur-représentés : {', '.join(sur_representes)}")
-
-        # Visualisation
-        fig, ax = plt.subplots()
-        ax.bar(compteur.keys(), compteur.values())
-        ax.axhline(y=moyenne, color='r', linestyle='--', label=f"Moyenne ({moyenne:.1f})")
-        ax.set_xticklabels(compteur.keys(), rotation=90)
-        ax.set_ylabel("Nombre d'affectations")
-        ax.legend()
-        st.pyplot(fig)
-
-        # Export
-        export_df = pd.DataFrame([{
-            "Date_Horaire": c['cle'],
-            "Enfants_affectés": ", ".join(c['affectes']),
-            "Places_restantes": max_par_date - len(c['affectes'])
-        } for c in creneaux_info])
-
-        csv = export_df.to_csv(index=False, sep=";").encode("utf-8")
-        st.download_button(
-            "Télécharger la répartition CSV",
-            data=csv,
-            file_name="repartition_optimisee.csv",
-            mime="text/csv"
-        )
+mercredi 18 mars | 15h : Aucun (5 place(s) restante(s))
