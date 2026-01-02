@@ -19,36 +19,38 @@ if uploaded_file:
     df["Noms_dispos"] = df["Noms_dispos"].apply(lambda x: x.split(";"))
 
     # -----------------------------
-    # 2️⃣ Parser et trier par date+heure
+    # Fonction parsing date/heure robuste
     # -----------------------------
     def parse_datetime(row):
-        # nettoyer l'heure
-        time_str = row['Horaires'].strip().replace('h', ':')
-        if ':' in time_str:
-            parts = time_str.split(':')
-            if len(parts[1]) == 0:
-                time_str += '00'
-        else:
+        date_str = row['Date'].strip()
+        time_str = row['Horaires'].strip().replace(' ', '').replace('h', ':')
+        if ':' not in time_str:
             time_str += ':00'
-        # parser la date complète
-        return datetime.strptime(f"{row['Date']} {time_str}", "%d/%m/%Y %H:%M")
+        else:
+            parts = time_str.split(':')
+            if len(parts) == 2:
+                if parts[1] == '' or len(parts[1]) == 1:
+                    parts[1] = parts[1].ljust(2, '0')
+                time_str = ':'.join(parts)
+            else:
+                time_str = parts[0] + ':00'
+        full_str = f"{date_str} {time_str}"
+        return datetime.strptime(full_str, "%d/%m/%Y %H:%M")
 
     df['Datetime'] = df.apply(parse_datetime, axis=1)
-    df = df.sort_values('Datetime').reset_index(drop=True)
 
     # -----------------------------
-    # 3️⃣ Récupération de tous les enfants
+    # 2️⃣ Détection des enfants
     # -----------------------------
-    all_children = sorted({child for sublist in df["Noms_dispos"] for child in sublist})
+    all_children = sorted(set(c for sublist in df["Noms_dispos"] for c in sublist))
     st.write(f"Enfants détectés ({len(all_children)}) :", all_children)
 
     # -----------------------------
-    # 4️⃣ Paramètres
+    # 3️⃣ Paramètres
     # -----------------------------
     st.subheader("Paramètres généraux")
     min_per_slot = st.number_input("Min enfants par créneau", min_value=1, max_value=10, value=4)
     max_per_slot = st.number_input("Max enfants par créneau", min_value=1, max_value=10, value=5)
-
     min_global = st.number_input("Min occurrences par enfant (global)", min_value=0, max_value=20, value=3)
     max_global = st.number_input("Max occurrences par enfant (global)", min_value=1, max_value=20, value=6)
 
@@ -63,36 +65,43 @@ if uploaded_file:
         if len(parts) >= 2:
             binomes.append(parts)
 
-    # Mapping enfant → binôme(s)
+    # Mapping enfant -> binôme
     child_to_binome = {}
     for b in binomes:
         for child in b:
             child_to_binome[child] = b
 
     # -----------------------------
-    # 5️⃣ Génération planning
+    # 4️⃣ Génération planning
     # -----------------------------
     def generate_schedule(df, min_per_slot, max_per_slot, min_global, max_global):
         schedule = []
         global_counter = Counter({child: 0 for child in all_children})
 
-        for idx, row in df.iterrows():
-            dispo = set(row["Noms_dispos"])
+        # Tri chronologique
+        df_sorted = df.sort_values("Datetime").reset_index(drop=True)
+
+        for idx, row in df_sorted.iterrows():
+            date, time, dispo = row["Date"], row["Horaires"], row["Noms_dispos"]
+            dispo = set(dispo)
+            # Retirer ceux qui ont atteint max global
             dispo = [c for c in dispo if global_counter[c] < max_global]
 
-            # gérer binômes : si un membre est dispo, tous doivent l'être
+            # Gestion binômes : si un membre est dispo, tous doivent être dispo et pas maxés
             def binome_check(c):
                 if c in child_to_binome:
                     return all(member in dispo and global_counter[member] < max_global for member in child_to_binome[c])
                 return True
 
             dispo = [c for c in dispo if binome_check(c)]
-            dispo.sort(key=lambda x: global_counter[x])  # priorité aux moins affectés
+            # Priorité aux enfants les moins affectés
+            dispo.sort(key=lambda x: global_counter[x])
 
             slot = []
             for child in dispo:
                 if child in slot:
                     continue
+                # Ajouter le binôme complet si nécessaire
                 if child in child_to_binome:
                     members = child_to_binome[child]
                     if all(member not in slot for member in members):
@@ -107,7 +116,7 @@ if uploaded_file:
                 if len(slot) >= max_per_slot:
                     break
 
-            # Vérifier min_per_slot
+            # Remplir min_per_slot si nécessaire
             if len(slot) < min_per_slot:
                 for child in dispo:
                     if child not in slot and len(slot) < min_per_slot:
@@ -115,16 +124,20 @@ if uploaded_file:
                         global_counter[child] += 1
 
             schedule.append({
-                "Date": row["Date"],
-                "Horaires": row["Horaires"],
+                "Date": date,
+                "Horaires": time,
                 "Enfants": slot,
                 "Places_restantes": max_per_slot - len(slot)
             })
 
         return schedule
 
+    # -----------------------------
+    # 5️⃣ Bouton génération
+    # -----------------------------
     if st.button("Générer le planning équilibré"):
         schedule = generate_schedule(df, min_per_slot, max_per_slot, min_global, max_global)
+
         st.subheader("Planning final")
         for s in schedule:
             st.write(f"{s['Date']} | {s['Horaires']} → {', '.join(s['Enfants'])} ({s['Places_restantes']} place(s))")
