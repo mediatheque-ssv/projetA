@@ -90,8 +90,6 @@ if uploaded_file:
         # Initialisation
         compteur = {nom: 0 for nom in noms_uniques}
         affectations = {nom: [] for nom in noms_uniques}
-        mid_date = df_sorted['dt'].quantile(0.5)  # Date médiane
-        max_early_occurrences = max_occ_global // 2
 
         # Parsing des dates
         mois_fr = {
@@ -112,9 +110,10 @@ if uploaded_file:
             except:
                 return pd.to_datetime("1900-01-01")
 
-        df_sorted = df.copy()
-        df_sorted['dt'] = df_sorted.apply(parse_dt, axis=1)
-        df_sorted = df_sorted.sort_values("dt")
+        df['dt'] = df.apply(parse_dt, axis=1)
+        df_sorted = df.sort_values("dt")  # <-- Définition de df_sorted AVANT son utilisation
+        mid_date = df_sorted['dt'].quantile(0.5)  # Date médiane
+        max_early_occurrences = max_occ_global // 2
 
         # Préparation des créneaux
         creneaux_info = []
