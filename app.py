@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import random
 from collections import defaultdict, Counter
+from datetime import datetime
 
 st.title("Répartition enfants avec binômes et min/max équilibré")
 
@@ -17,12 +18,15 @@ if uploaded_file:
     df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8")
     df["Noms_dispos"] = df["Noms_dispos"].apply(lambda x: x.split(";"))
 
-    # Récupération de tous les enfants
-    all_children = set()
-    for lst in df["Noms_dispos"]:
-        all_children.update(lst)
-    all_children = sorted(list(all_children))
+    # Conversion Date + Horaires en datetime pour tri automatique
+    def parse_datetime(row):
+        return datetime.strptime(f"{row['Date']} {row['Horaires'].replace('h',':00')}", "%d/%m/%Y %H:%M")
 
+    df['Datetime'] = df.apply(parse_datetime, axis=1)
+    df = df.sort_values('Datetime').reset_index(drop=True)
+
+    # Récupération de tous les enfants
+    all_children = sorted({c for sublist in df["Noms_dispos"] for c in sublist})
     st.write(f"Enfants détectés ({len(all_children)}) :", all_children)
 
     # -----------------------------
@@ -31,7 +35,6 @@ if uploaded_file:
     st.subheader("Paramètres généraux")
     min_per_slot = st.number_input("Min enfants par créneau", min_value=1, max_value=10, value=4)
     max_per_slot = st.number_input("Max enfants par créneau", min_value=1, max_value=10, value=5)
-
     min_global = st.number_input("Min occurrences par enfant (global)", min_value=0, max_value=20, value=3)
     max_global = st.number_input("Max occurrences par enfant (global)", min_value=1, max_value=20, value=6)
 
@@ -46,7 +49,7 @@ if uploaded_file:
         if len(parts) >= 2:
             binomes.append(parts)
 
-    # Création d'un mapping enfant → binôme(s)
+    # Mapping enfant → binôme(s)
     child_to_binome = {}
     for b in binomes:
         for child in b:
@@ -57,20 +60,16 @@ if uploaded_file:
     # -----------------------------
     def generate_schedule(df, min_per_slot, max_per_slot, min_global, max_global):
         schedule = []
-        # Compteur global des affectations par enfant
         global_counter = Counter({child: 0 for child in all_children})
 
-        # On mélange les créneaux pour éviter les patterns fixes
-        df_shuffled = df.sample(frac=1, random_state=42).reset_index(drop=True)
-
-        for idx, row in df_shuffled.iterrows():
+        for idx, row in df.iterrows():
             date, time, dispo = row["Date"], row["Horaires"], row["Noms_dispos"]
             dispo = set(dispo)
 
-            # Enfants déjà atteignant max global
+            # Enfants déjà au max global
             dispo = [c for c in dispo if global_counter[c] < max_global]
 
-            # Pour gérer les binômes : si un membre est dispo, il faut que tous les binômes soient dispo
+            # Vérifie si binôme complet dispo
             def binome_check(c):
                 if c in child_to_binome:
                     return all(member in dispo and global_counter[member] < max_global for member in child_to_binome[c])
@@ -83,7 +82,6 @@ if uploaded_file:
 
             slot = []
             for child in dispo:
-                # Ajouter le binôme complet si nécessaire
                 if child in slot:
                     continue
                 if child in child_to_binome:
@@ -101,9 +99,8 @@ if uploaded_file:
                 if len(slot) >= max_per_slot:
                     break
 
-            # Vérifier min per slot
+            # Remplir pour atteindre min_per_slot si possible
             if len(slot) < min_per_slot:
-                # remplir avec les enfants encore dispo
                 for child in dispo:
                     if child not in slot and len(slot) < min_per_slot:
                         slot.append(child)
@@ -116,6 +113,8 @@ if uploaded_file:
                 "Places_restantes": max_per_slot - len(slot)
             })
 
+        # Tri final par datetime (pour sécurité)
+        schedule.sort(key=lambda x: datetime.strptime(f"{x['Date']} {x['Horaires'].replace('h',':00')}", "%d/%m/%Y %H:%M"))
         return schedule
 
     if st.button("Générer le planning équilibré"):
@@ -133,7 +132,7 @@ if uploaded_file:
         df_counter = pd.DataFrame({"Enfant": list(total_counter.keys()), "Occurrences": list(total_counter.values())})
         st.dataframe(df_counter.sort_values("Occurrences"))
 
-        # Option CSV export
+        # Export CSV
         csv = pd.DataFrame(schedule)
         csv["Enfants"] = csv["Enfants"].apply(lambda x: ";".join(x))
         st.download_button("Exporter CSV", csv.to_csv(index=False, sep=";"), "planning.csv", "text/csv")
