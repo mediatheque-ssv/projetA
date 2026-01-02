@@ -121,6 +121,13 @@ if uploaded_file:
         compteur = {nom: 0 for nom in noms_uniques}
         affectations = {nom: [] for nom in noms_uniques}
 
+        # Compter les disponibilités totales de chaque enfant
+        disponibilites_totales = {nom: 0 for nom in noms_uniques}
+        for _, row in df.iterrows():
+            dispos = [n.strip() for n in str(row["Noms_dispos"]).split(separator) if n.strip() in noms_uniques]
+            for nom in dispos:
+                disponibilites_totales[nom] += 1
+
         # Parsing et tri des dates
         df['dt'] = df.apply(parse_dt, axis=1)
         df_sorted = df.sort_values("dt")
@@ -178,10 +185,10 @@ if uploaded_file:
                             affectations[a].append(creneau['dt'])
                             affectations[b].append(creneau['dt'])
 
-                # Affectation solo (priorité aux moins affectés)
+                # Affectation solo (priorité aux enfants avec le moins de disponibilités)
                 candidats = sorted(
                     [n for n in creneau['dispos'] if n not in creneau['affectes'] and compteur[n] < max_occ_global],
-                    key=lambda x: compteur[x]
+                    key=lambda x: (disponibilites_totales[x], compteur[x])  # Priorité aux enfants avec le moins de disponibilités
                 )
                 for nom in candidats:
                     if len(creneau['affectes']) >= max_par_date:
