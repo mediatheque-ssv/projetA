@@ -208,7 +208,8 @@ if uploaded_file:
                 candidats_solo = []
                 for n in dispos:
                     if (
-                        n not in creneau['affectes']
+                        n in compteur  # Vérification ajoutée
+                        and n not in creneau['affectes']
                         and compteur[n] < max_occ_global
                     ):
                         last_dates = affectations[n]
@@ -247,7 +248,7 @@ if uploaded_file:
                 # Prendre les moins affectés parmi les dispos
                 candidats_补充 = [
                     (n, compteur[n]) for n in dispos
-                    if n not in creneau['affectes'] and compteur[n] < max_occ_global
+                    if n in compteur and n not in creneau['affectes'] and compteur[n] < max_occ_global  # Vérification ajoutée
                 ]
                 candidats_补充.sort(key=lambda x: x[1])
                 
