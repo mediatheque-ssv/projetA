@@ -194,23 +194,19 @@ if uploaded_file:
         # =====================================================
         # 7️⃣ TRI GARANTI PAR DATE/HORAIRE
         # =====================================================
+        # On garde une map de la clé vers le datetime original
+        cle_vers_dt = {}
+        for _, row in df_sorted.iterrows():
+            date = str(row["Date"]).strip() or "1900-01-01"
+            horaire = str(row["Horaires"]).strip() or "00:00"
+            cle = f"{date} | {horaire}"
+            cle_vers_dt[cle] = row['dt']
+        
         def cle_tri(item):
             cle = item[0]
-            parts = cle.split("|")
-            date_str = parts[0].strip()
-            horaire_str = parts[1].strip() if len(parts) > 1 else "00:00"
-            
-            try:
-                date_dt = pd.to_datetime(date_str, dayfirst=True)
-            except:
-                date_dt = pd.to_datetime("1900-01-01")
-            
-            try:
-                heure_dt = pd.to_datetime(horaire_str, format="%H:%M").time()
-            except:
-                heure_dt = pd.to_datetime("00:00", format="%H:%M").time()
-            
-            return (date_dt, heure_dt)
+            # Utiliser le datetime déjà parsé
+            dt = cle_vers_dt.get(cle, pd.to_datetime("1900-01-01 00:00"))
+            return dt
 
         repartition_tri_list = sorted(repartition.items(), key=cle_tri)
 
