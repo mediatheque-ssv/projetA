@@ -56,10 +56,12 @@ if uploaded_file:
     # 3️⃣ PARAMÈTRES DES CRÉNEAUX
     # =====================================================
     st.subheader("Paramètres des créneaux")
+
     min_par_date = st.slider(
         "Nombre minimal d'enfants par créneau",
         min_value=1, max_value=10, value=4
     )
+
     max_par_date = st.slider(
         "Nombre maximal d'enfants par créneau",
         min_value=min_par_date, max_value=10, value=max(5, min_par_date)
@@ -109,17 +111,19 @@ if uploaded_file:
     binomes = st.session_state.binomes
 
     # =====================================================
-    # 6️⃣ RÉPARTITION ÉGALITAIRE AVEC ESPACEMENT
+    # 6️⃣ RÉPARTITION ÉGALITAIRE AVEC ESPACEMENT ET MIN PAR CRÉNEAU
     # =====================================================
     if st.button("Répartir les enfants"):
 
         repartition = {}
         compteur = {nom: 0 for nom in noms_uniques}
-        affectations = {nom: [] for nom in noms_uniques}  # datetime list
-        DELAI_PREFERENTIEL = 14
-        DELAI_MINIMUM = 7
+        deja_affectes_par_date = {}
+        affectations = {nom: [] for nom in noms_uniques}  # stocke les datetimes
 
-        # Trier CSV par date + horaire
+        DELAI_PREFERENTIEL = 14  # jours
+        DELAI_MINIMUM = 7        # jours
+
+        # trier les lignes CSV par date + horaire
         def parse_dt(row):
             try:
                 return pd.to_datetime(f"{row['Date']} {row['Horaires']}", dayfirst=True)
@@ -137,11 +141,11 @@ if uploaded_file:
 
             cle = f"{date} | {horaire}"
             repartition[cle] = []
+            deja_affectes_par_date[cle] = set()
+
             date_horaire_dt = pd.to_datetime(f"{date} {horaire}", dayfirst=True, errors="coerce")
             if pd.isna(date_horaire_dt):
                 date_horaire_dt = pd.to_datetime("1900-01-01 00:00")
-
-            deja_affectes = set()
 
             # ---- BINÔMES
             binomes_dispos = []
@@ -152,6 +156,7 @@ if uploaded_file:
                     and compteur[b] < max_occ_global
                     and len(repartition[cle]) <= max_par_date - 2
                 ):
+                    # vérifier espacement
                     min_a = min([(date_horaire_dt - d).days for d in affectations[a]] + [float('inf')])
                     min_b = min([(date_horaire_dt - d).days for d in affectations[b]] + [float('inf')])
                     if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
@@ -162,14 +167,14 @@ if uploaded_file:
                 repartition[cle].extend([a, b])
                 compteur[a] += 1
                 compteur[b] += 1
-                deja_affectes.update([a, b])
+                deja_affectes_par_date[cle].update([a, b])
                 affectations[a].append(date_horaire_dt)
                 affectations[b].append(date_horaire_dt)
 
-            # ---- SOLO
+            # ---- SOLO, triés par : plus grand espacement puis moins de créneaux
             score_solos = []
             for n in dispos:
-                if n not in deja_affectes and compteur[n] < max_occ_global:
+                if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global:
                     last_dates = affectations[n]
                     distance = min([(date_horaire_dt - d).days for d in last_dates] + [float('inf')])
                     score_solos.append((n, distance, compteur[n]))
@@ -179,26 +184,27 @@ if uploaded_file:
                 if len(repartition[cle]) < max_par_date:
                     repartition[cle].append(nom)
                     compteur[nom] += 1
-                    deja_affectes.add(nom)
+                    deja_affectes_par_date[cle].add(nom)
                     affectations[nom].append(date_horaire_dt)
 
-            # ---- Compléter pour atteindre min_par_date
-            restants = [n for n in noms_uniques if n not in deja_affectes and compteur[n] < max_occ_global]
+            # ---- Compléter pour atteindre min_par_date si nécessaire
+            restants = [n for n in noms_uniques if n not in deja_affectes_par_date[cle] and compteur[n] < max_occ_global]
             random.shuffle(restants)
             for n in restants:
                 if len(repartition[cle]) < min_par_date:
                     repartition[cle].append(n)
                     compteur[n] += 1
-                    deja_affectes.add(n)
+                    deja_affectes_par_date[cle].add(n)
                     affectations[n].append(date_horaire_dt)
                 else:
                     break
 
         # =====================================================
-        # 7️⃣ TRI PAR DATE + HORAIRE
+        # 7️⃣ TRI PAR DATE + HORAIRE (robuste)
         # =====================================================
         def cle_tri(cle):
-            parts = cle.split("|", 1)
+            cle_str = str(cle)
+            parts = cle_str.split("|", 1)
             date_str = parts[0].strip() if len(parts) > 0 else "1900-01-01"
             horaire_str = parts[1].strip() if len(parts) > 1 else "00:00"
             try:
