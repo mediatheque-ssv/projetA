@@ -1,157 +1,279 @@
 import streamlit as st
 import pandas as pd
 import random
-from collections import Counter
-from datetime import datetime
 
-st.title("Répartition enfants avec binômes et min/max équilibré")
+st.title("Répartition égalitaire bénévoles / enfants (étalée)")
 
-# -----------------------------
-# 1️⃣ Upload CSV de disponibilités
-# -----------------------------
+# =====================================================
+# 1️⃣ IMPORT DU CSV
+# =====================================================
 uploaded_file = st.file_uploader(
-    "Importer le CSV (Excel FR – séparateur ;) avec colonnes Date,Horaires,Noms_dispos",
+    "Importer le CSV (Date ; Horaires ; Noms_dispos)",
     type=["csv"]
 )
 
 if uploaded_file:
-    df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8")
-    df["Noms_dispos"] = df["Noms_dispos"].apply(lambda x: x.split(";"))
 
-    # -----------------------------
-    # Fonction parsing date/heure robuste
-    # -----------------------------
-    def parse_datetime(row):
-        date_str = row['Date'].strip()
-        time_str = row['Horaires'].strip().replace(' ', '').replace('h', ':')
-        if ':' not in time_str:
-            time_str += ':00'
-        else:
-            parts = time_str.split(':')
-            if len(parts) == 2:
-                if parts[1] == '' or len(parts[1]) == 1:
-                    parts[1] = parts[1].ljust(2, '0')
-                time_str = ':'.join(parts)
-            else:
-                time_str = parts[0] + ':00'
-        full_str = f"{date_str} {time_str}"
-        return datetime.strptime(full_str, "%d/%m/%Y %H:%M")
+    # Lecture CSV
+    try:
+        df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
+    except Exception as e:
+        st.error(f"Erreur de lecture du CSV : {e}")
+        st.stop()
 
-    df['Datetime'] = df.apply(parse_datetime, axis=1)
+    df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
 
-    # -----------------------------
-    # 2️⃣ Détection des enfants
-    # -----------------------------
-    all_children = sorted(set(c for sublist in df["Noms_dispos"] for c in sublist))
-    st.write(f"Enfants détectés ({len(all_children)}) :", all_children)
+    if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
+        st.error(
+            "Le CSV doit contenir EXACTEMENT les colonnes : Date, Horaires, Noms_dispos\n"
+            f"Colonnes détectées : {df.columns.tolist()}"
+        )
+        st.stop()
 
-    # -----------------------------
-    # 3️⃣ Paramètres
-    # -----------------------------
-    st.subheader("Paramètres généraux")
-    min_per_slot = st.number_input("Min enfants par créneau", min_value=1, max_value=10, value=4)
-    max_per_slot = st.number_input("Max enfants par créneau", min_value=1, max_value=10, value=5)
-    min_global = st.number_input("Min occurrences par enfant (global)", min_value=0, max_value=20, value=3)
-    max_global = st.number_input("Max occurrences par enfant (global)", min_value=1, max_value=20, value=6)
+    st.subheader("Aperçu du CSV")
+    st.dataframe(df)
 
-    st.subheader("Binômes (inséparables)")
-    binomes_text = st.text_area(
-        "Entrez les binômes séparés par une virgule et un retour à la ligne pour chaque binôme, exemple :\nHugo,Théo\nMaïwenn,Sterenn",
-        height=100
+    # =====================================================
+    # 2️⃣ EXTRACTION DES NOMS
+    # =====================================================
+    # Détection automatique du séparateur (virgule ou point-virgule)
+    sample_cell = str(df["Noms_dispos"].iloc[0]) if len(df) > 0 else ""
+    separator = "," if "," in sample_cell else ";"
+    
+    noms_uniques = sorted({
+        n.strip()
+        for cell in df["Noms_dispos"]
+        if pd.notna(cell)
+        for n in str(cell).split(separator)
+        if n.strip()
+    })
+
+    st.subheader("Enfants détectés")
+    if noms_uniques:
+        st.write(noms_uniques)
+        st.info(f"Séparateur détecté : '{separator}'")
+    else:
+        st.warning("Aucun enfant détecté ! Vérifie le CSV")
+        st.stop()
+
+    # =====================================================
+    # 3️⃣ PARAMÈTRES DES CRÉNEAUX
+    # =====================================================
+    st.subheader("Paramètres des créneaux")
+    min_par_date = st.slider("Nombre minimal d'enfants par créneau", min_value=1, max_value=10, value=4)
+    max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_value=min_par_date, max_value=10, value=max(5, min_par_date))
+
+    # =====================================================
+    # 4️⃣ OCCURRENCES MAXIMALES GLOBALES
+    # =====================================================
+    total_creaneaux = len(df)
+    places_totales = total_creaneaux * max_par_date
+    occ_recommandee = round(places_totales / len(noms_uniques))
+    st.info(f"Total créneaux : {total_creaneaux}, Places totales : {places_totales} → Occurrence idéale par enfant ≈ {occ_recommandee}")
+
+    max_occ_global = st.number_input(
+        "Nombre maximal d'occurrences par enfant (pour tous)",
+        min_value=1,
+        max_value=total_creaneaux,
+        value=occ_recommandee
     )
-    binomes = []
-    for line in binomes_text.split("\n"):
-        parts = [x.strip() for x in line.split(",") if x.strip()]
-        if len(parts) >= 2:
-            binomes.append(parts)
 
-    # Mapping enfant -> binôme
-    child_to_binome = {}
-    for b in binomes:
-        for child in b:
-            child_to_binome[child] = b
+    # =====================================================
+    # 5️⃣ BINÔMES
+    # =====================================================
+    st.subheader("Binômes à ne pas séparer")
+    if "binomes" not in st.session_state:
+        st.session_state.binomes = []
 
-    # -----------------------------
-    # 4️⃣ Génération planning
-    # -----------------------------
-    def generate_schedule(df, min_per_slot, max_per_slot, min_global, max_global):
-        schedule = []
-        global_counter = Counter({child: 0 for child in all_children})
+    col1, col2 = st.columns(2)
+    with col1:
+        enfant_a = st.selectbox("Enfant A", noms_uniques, key="a")
+    with col2:
+        enfant_b = st.selectbox("Enfant B", noms_uniques, key="b")
 
-        # Tri chronologique
-        df_sorted = df.sort_values("Datetime").reset_index(drop=True)
+    if (
+        enfant_a != enfant_b
+        and st.button("Ajouter le binôme")
+        and (enfant_a, enfant_b) not in st.session_state.binomes
+        and (enfant_b, enfant_a) not in st.session_state.binomes
+    ):
+        st.session_state.binomes.append((enfant_a, enfant_b))
 
-        for idx, row in df_sorted.iterrows():
-            date, time, dispo = row["Date"], row["Horaires"], row["Noms_dispos"]
-            dispo = set(dispo)
-            # Retirer ceux qui ont atteint max global
-            dispo = [c for c in dispo if global_counter[c] < max_global]
+    if st.session_state.binomes:
+        st.write("Binômes définis :")
+        for a, b in st.session_state.binomes:
+            st.write(f"- {a} + {b}")
 
-            # Gestion binômes : si un membre est dispo, tous doivent être dispo et pas maxés
-            def binome_check(c):
-                if c in child_to_binome:
-                    return all(member in dispo and global_counter[member] < max_global for member in child_to_binome[c])
-                return True
+    binomes = st.session_state.binomes
 
-            dispo = [c for c in dispo if binome_check(c)]
-            # Priorité aux enfants les moins affectés
-            dispo.sort(key=lambda x: global_counter[x])
+    # =====================================================
+    # 6️⃣ RÉPARTITION PAR VAGUES SUCCESSIVES
+    # =====================================================
+    if st.button("Répartir les enfants"):
 
-            slot = []
-            for child in dispo:
-                if child in slot:
-                    continue
-                # Ajouter le binôme complet si nécessaire
-                if child in child_to_binome:
-                    members = child_to_binome[child]
-                    if all(member not in slot for member in members):
-                        if len(slot) + len(members) <= max_per_slot:
-                            slot.extend(members)
-                            for m in members:
-                                global_counter[m] += 1
-                else:
-                    if len(slot) < max_per_slot:
-                        slot.append(child)
-                        global_counter[child] += 1
-                if len(slot) >= max_per_slot:
-                    break
+        # Initialisation
+        compteur = {nom: 0 for nom in noms_uniques}
+        affectations = {nom: [] for nom in noms_uniques}
+        DELAI_MINIMUM = 7
 
-            # Remplir min_per_slot si nécessaire
-            if len(slot) < min_per_slot:
-                for child in dispo:
-                    if child not in slot and len(slot) < min_per_slot:
-                        slot.append(child)
-                        global_counter[child] += 1
+        # Parser les dates en français
+        mois_fr = {
+            'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
+            'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
+            'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
+        }
+        
+        def parse_dt(row):
+            try:
+                date_str = str(row['Date']).strip().lower()
+                horaire_str = str(row['Horaires']).strip()
+                
+                parts = date_str.split()
+                jour = int(parts[1]) if len(parts) > 1 else 1
+                mois_nom = parts[2] if len(parts) > 2 else 'janvier'
+                mois = mois_fr.get(mois_nom, 1)
+                
+                horaire_str = horaire_str.replace('h', ':00') if 'h' in horaire_str else horaire_str
+                heure = int(horaire_str.split(':')[0]) if ':' in horaire_str else 0
+                minute = int(horaire_str.split(':')[1]) if ':' in horaire_str and len(horaire_str.split(':')) > 1 else 0
+                
+                return pd.Timestamp(year=2026, month=mois, day=jour, hour=heure, minute=minute)
+            except:
+                return pd.to_datetime("1900-01-01 00:00")
+        
+        df_sorted = df.copy()
+        df_sorted['dt'] = df_sorted.apply(parse_dt, axis=1)
+        df_sorted = df_sorted.sort_values("dt")
 
-            schedule.append({
-                "Date": date,
-                "Horaires": time,
-                "Enfants": slot,
-                "Places_restantes": max_per_slot - len(slot)
+        # Préparer les créneaux
+        creneaux_info = []
+        for _, row in df_sorted.iterrows():
+            date = str(row["Date"]).strip() or "1900-01-01"
+            horaire = str(row["Horaires"]).strip() or "00:00"
+            dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
+            dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
+            # Filtrer pour garder seulement les noms reconnus
+            dispos = [n for n in dispos if n in compteur]
+            
+            cle = f"{date} | {horaire}"
+            creneaux_info.append({
+                'cle': cle,
+                'dt': row['dt'],
+                'dispos': dispos,
+                'affectes': []
             })
 
-        return schedule
+        # Algorithme par vagues
+        vague = 0
+        
+        while vague < 50:
+            vague += 1
+            affectations_vague = 0
+            creneaux_shuffled = creneaux_info.copy()
+            random.shuffle(creneaux_shuffled)
+            
+            for creneau in creneaux_shuffled:
+                if len(creneau['affectes']) >= max_par_date:
+                    continue
+                
+                cle = creneau['cle']
+                date_horaire_dt = creneau['dt']
+                dispos = creneau['dispos']
+                
+                # BINÔMES
+                for a, b in binomes:
+                    if (
+                        a in dispos and b in dispos
+                        and a not in creneau['affectes']
+                        and b not in creneau['affectes']
+                        and compteur[a] < max_occ_global
+                        and compteur[b] < max_occ_global
+                        and len(creneau['affectes']) <= max_par_date - 2
+                    ):
+                        min_a = min([(date_horaire_dt - d).days for d in affectations[a]] + [float('inf')])
+                        min_b = min([(date_horaire_dt - d).days for d in affectations[b]] + [float('inf')])
+                        if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
+                            creneau['affectes'].extend([a, b])
+                            compteur[a] += 1
+                            compteur[b] += 1
+                            affectations[a].append(date_horaire_dt)
+                            affectations[b].append(date_horaire_dt)
+                            affectations_vague += 2
 
-    # -----------------------------
-    # 5️⃣ Bouton génération
-    # -----------------------------
-    if st.button("Générer le planning équilibré"):
-        schedule = generate_schedule(df, min_per_slot, max_per_slot, min_global, max_global)
+                # SOLO
+                candidats_solo = []
+                for n in dispos:
+                    if (
+                        n not in creneau['affectes']
+                        and compteur[n] < max_occ_global
+                    ):
+                        distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
+                        if distance >= DELAI_MINIMUM:
+                            candidats_solo.append(n)
+                
+                random.shuffle(candidats_solo)
+                
+                for nom in candidats_solo:
+                    if len(creneau['affectes']) < max_par_date:
+                        creneau['affectes'].append(nom)
+                        compteur[nom] += 1
+                        affectations[nom].append(date_horaire_dt)
+                        affectations_vague += 1
+            
+            if affectations_vague == 0:
+                break
+        
+        # Compléter les créneaux sous le minimum
+        for creneau in creneaux_info:
+            if len(creneau['affectes']) < min_par_date:
+                candidats = [(n, compteur[n]) for n in creneau['dispos']
+                           if n not in creneau['affectes'] and compteur[n] < max_occ_global]
+                candidats.sort(key=lambda x: x[1])
+                
+                for nom, _ in candidats:
+                    if len(creneau['affectes']) < min_par_date:
+                        creneau['affectes'].append(nom)
+                        compteur[nom] += 1
+                        affectations[nom].append(creneau['dt'])
 
-        st.subheader("Planning final")
-        for s in schedule:
-            st.write(f"{s['Date']} | {s['Horaires']} → {', '.join(s['Enfants'])} ({s['Places_restantes']} place(s))")
+        # =====================================================
+        # 7️⃣ TRI ET AFFICHAGE
+        # =====================================================
+        creneaux_info.sort(key=lambda x: x['dt'])
 
-        # Occurrences par enfant
+        st.subheader("Répartition finale (triée par date et horaire)")
+        for creneau in creneaux_info:
+            enfants = creneau['affectes']
+            st.write(
+                f"{creneau['cle']} : {', '.join(enfants) if enfants else 'Aucun'} "
+                f"({max_par_date - len(enfants)} place(s) restante(s))"
+            )
+
         st.subheader("Occurrences par enfant")
-        total_counter = Counter()
-        for s in schedule:
-            for c in s['Enfants']:
-                total_counter[c] += 1
-        df_counter = pd.DataFrame({"Enfant": list(total_counter.keys()), "Occurrences": list(total_counter.values())})
-        st.dataframe(df_counter.sort_values("Occurrences"))
+        compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
+        st.write(compteur_sorted)
 
-        # Export CSV
-        csv = pd.DataFrame(schedule)
-        csv["Enfants"] = csv["Enfants"].apply(lambda x: ";".join(x))
-        st.download_button("Exporter CSV", csv.to_csv(index=False, sep=";"), "planning.csv", "text/csv")
+        jamais_affectes = [nom for nom, c in compteur.items() if c == 0]
+        if jamais_affectes:
+            st.subheader("Enfants jamais affectés")
+            st.write(", ".join(jamais_affectes))
+
+        # =====================================================
+        # 8️⃣ EXPORT CSV
+        # =====================================================
+        export_df = pd.DataFrame([
+            {
+                "Date_Horaire": creneau['cle'],
+                "Enfants_affectés": separator.join(creneau['affectes']),
+                "Places_restantes": max_par_date - len(creneau['affectes'])
+            }
+            for creneau in creneaux_info
+        ])
+
+        csv = export_df.to_csv(index=False, sep=";").encode("utf-8")
+        st.download_button(
+            "Télécharger la répartition CSV",
+            data=csv,
+            file_name="repartition.csv",
+            mime="text/csv"
+        )
