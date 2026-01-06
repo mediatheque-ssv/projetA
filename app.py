@@ -64,10 +64,9 @@ if uploaded_file:
     max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_value=min_par_date, max_value=10, value=max(5, min_par_date))
 
     # =====================================================
-    # 4️⃣ OCCURRENCES PROPORTIONNELLES AUX DISPOS
+    # 4️⃣ CALCUL DES DISPONIBILITÉS
     # =====================================================
     total_creaneaux = len(df)
-    places_totales = total_creaneaux * max_par_date
     
     # Calculer les dispos de chaque enfant
     dispos_par_enfant = {nom: 0 for nom in noms_uniques}
@@ -82,23 +81,7 @@ if uploaded_file:
     dispos_sorted = dict(sorted(dispos_par_enfant.items(), key=lambda x: x[1]))
     st.write(dispos_sorted)
     
-    # Calculer le taux de remplissage cible
-    taux_remplissage = st.slider(
-        "Taux de remplissage cible (%)",
-        min_value=30,
-        max_value=100,
-        value=50,
-        help="Pourcentage des disponibilités à utiliser. Ex: 50% = si quelqu'un est dispo 10 fois, il sera affecté ~5 fois"
-    )
-    
-    # Calculer le max pour chaque enfant (proportionnel à ses dispos)
-    max_par_enfant = {}
-    for nom, nb_dispos in dispos_par_enfant.items():
-        max_par_enfant[nom] = max(1, round(nb_dispos * taux_remplissage / 100))
-    
-    st.info(f"Max occurrences calculé par enfant (basé sur {taux_remplissage}% de leurs dispos)")
-    max_sorted = dict(sorted(max_par_enfant.items(), key=lambda x: x[1]))
-    st.write(max_sorted)
+    st.info("L'algorithme priorise automatiquement les personnes les moins disponibles")
 
     # =====================================================
     # 5️⃣ BINÔMES
@@ -133,7 +116,7 @@ if uploaded_file:
     # =====================================================
     if st.button("Répartir les enfants"):
 
-        # Initialisation
+        # Initialisation (pas de limite max par enfant)
         compteur = {nom: 0 for nom in noms_uniques}
         affectations = {nom: [] for nom in noms_uniques}
         DELAI_MINIMUM = 7
@@ -200,22 +183,20 @@ if uploaded_file:
                 date_horaire_dt = creneau['dt']
                 dispos = creneau['dispos']
                 
-                # BINÔMES en priorité
+                # BINÔMES en priorité (pas de limite max)
                 binomes_ok = []
                 for a, b in binomes:
                     if (
                         a in dispos and b in dispos
                         and a not in creneau['affectes']
                         and b not in creneau['affectes']
-                        and compteur[a] < max_par_enfant[a]
-                        and compteur[b] < max_par_enfant[b]
                         and len(creneau['affectes']) <= max_par_date - 2
                     ):
                         min_a = min([(date_horaire_dt - d).days for d in affectations[a]] + [float('inf')])
                         min_b = min([(date_horaire_dt - d).days for d in affectations[b]] + [float('inf')])
                         if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
-                            score = compteur[a] + compteur[b]
-                            binomes_ok.append((a, b, score))
+                            total_dispos = dispos_par_enfant[a] + dispos_par_enfant[b]
+                            binomes_ok.append((a, b, total_dispos))
                 
                 # Prendre le binôme le moins dispo globalement
                 binomes_ok.sort(key=lambda x: (dispos_par_enfant[x[0]] + dispos_par_enfant[x[1]]))
@@ -231,10 +212,7 @@ if uploaded_file:
                 # SOLO : trier par nombre de dispos (les moins dispos en premier)
                 candidats_solo = []
                 for n in dispos:
-                    if (
-                        n not in creneau['affectes']
-                        and compteur[n] < max_par_enfant[n]
-                    ):
+                    if n not in creneau['affectes']:
                         distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                         if distance >= DELAI_MINIMUM:
                             nb_dispos = dispos_par_enfant[n]
@@ -245,7 +223,7 @@ if uploaded_file:
                 
                 # Prendre seulement jusqu'au max (laisser des places vides si besoin)
                 places_dispo = max_par_date - len(creneau['affectes'])
-                for nom, _ in candidats_solo[:places_dispo]:
+                for nom, _, _ in candidats_solo[:places_dispo]:
                     creneau['affectes'].append(nom)
                     compteur[nom] += 1
                     affectations[nom].append(date_horaire_dt)
