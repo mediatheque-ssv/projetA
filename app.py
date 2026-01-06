@@ -163,24 +163,23 @@ if uploaded_file:
                 'affectes': []
             })
 
-        # Algorithme par vagues
+        # Algorithme par vagues avec priorité égalité stricte
         vague = 0
         
         while vague < 50:
             vague += 1
             affectations_vague = 0
-            creneaux_shuffled = creneaux_info.copy()
-            random.shuffle(creneaux_shuffled)
             
-            for creneau in creneaux_shuffled:
+            # Traiter les créneaux dans l'ordre chrono (pas de shuffle)
+            for creneau in creneaux_info:
                 if len(creneau['affectes']) >= max_par_date:
                     continue
                 
-                cle = creneau['cle']
                 date_horaire_dt = creneau['dt']
                 dispos = creneau['dispos']
                 
-                # BINÔMES
+                # BINÔMES en priorité
+                binomes_ok = []
                 for a, b in binomes:
                     if (
                         a in dispos and b in dispos
@@ -193,14 +192,21 @@ if uploaded_file:
                         min_a = min([(date_horaire_dt - d).days for d in affectations[a]] + [float('inf')])
                         min_b = min([(date_horaire_dt - d).days for d in affectations[b]] + [float('inf')])
                         if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
-                            creneau['affectes'].extend([a, b])
-                            compteur[a] += 1
-                            compteur[b] += 1
-                            affectations[a].append(date_horaire_dt)
-                            affectations[b].append(date_horaire_dt)
-                            affectations_vague += 2
+                            score = compteur[a] + compteur[b]
+                            binomes_ok.append((a, b, score))
+                
+                # Prendre le binôme le moins affecté
+                binomes_ok.sort(key=lambda x: x[2])
+                if binomes_ok:
+                    a, b, _ = binomes_ok[0]
+                    creneau['affectes'].extend([a, b])
+                    compteur[a] += 1
+                    compteur[b] += 1
+                    affectations[a].append(date_horaire_dt)
+                    affectations[b].append(date_horaire_dt)
+                    affectations_vague += 2
 
-                # SOLO
+                # SOLO : trier par compteur (les moins affectés en premier)
                 candidats_solo = []
                 for n in dispos:
                     if (
@@ -209,32 +215,23 @@ if uploaded_file:
                     ):
                         distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                         if distance >= DELAI_MINIMUM:
-                            candidats_solo.append(n)
+                            candidats_solo.append((n, compteur[n]))
                 
-                random.shuffle(candidats_solo)
+                # Trier par compteur uniquement (égalité stricte)
+                candidats_solo.sort(key=lambda x: x[1])
                 
-                for nom in candidats_solo:
-                    if len(creneau['affectes']) < max_par_date:
-                        creneau['affectes'].append(nom)
-                        compteur[nom] += 1
-                        affectations[nom].append(date_horaire_dt)
-                        affectations_vague += 1
+                # Prendre seulement jusqu'au max (laisser des places vides si besoin)
+                places_dispo = max_par_date - len(creneau['affectes'])
+                for nom, _ in candidats_solo[:places_dispo]:
+                    creneau['affectes'].append(nom)
+                    compteur[nom] += 1
+                    affectations[nom].append(date_horaire_dt)
+                    affectations_vague += 1
             
             if affectations_vague == 0:
                 break
         
-        # Compléter les créneaux sous le minimum
-        for creneau in creneaux_info:
-            if len(creneau['affectes']) < min_par_date:
-                candidats = [(n, compteur[n]) for n in creneau['dispos']
-                           if n not in creneau['affectes'] and compteur[n] < max_occ_global]
-                candidats.sort(key=lambda x: x[1])
-                
-                for nom, _ in candidats:
-                    if len(creneau['affectes']) < min_par_date:
-                        creneau['affectes'].append(nom)
-                        compteur[nom] += 1
-                        affectations[nom].append(creneau['dt'])
+        # NE PAS compléter automatiquement le min - laisser des places vides si nécessaire
 
         # =====================================================
         # 7️⃣ TRI ET AFFICHAGE
