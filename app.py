@@ -64,19 +64,41 @@ if uploaded_file:
     max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_value=min_par_date, max_value=10, value=max(5, min_par_date))
 
     # =====================================================
-    # 4️⃣ OCCURRENCES MAXIMALES GLOBALES
+    # 4️⃣ OCCURRENCES PROPORTIONNELLES AUX DISPOS
     # =====================================================
     total_creaneaux = len(df)
     places_totales = total_creaneaux * max_par_date
-    occ_recommandee = round(places_totales / len(noms_uniques))
-    st.info(f"Total créneaux : {total_creaneaux}, Places totales : {places_totales} → Occurrence idéale par enfant ≈ {occ_recommandee}")
-
-    max_occ_global = st.number_input(
-        "Nombre maximal d'occurrences par enfant (pour tous)",
-        min_value=1,
-        max_value=total_creaneaux,
-        value=occ_recommandee
+    
+    # Calculer les dispos de chaque enfant
+    dispos_par_enfant = {nom: 0 for nom in noms_uniques}
+    for _, row in df.iterrows():
+        dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
+        dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
+        for n in dispos:
+            if n in dispos_par_enfant:
+                dispos_par_enfant[n] += 1
+    
+    st.subheader("Disponibilités par enfant")
+    dispos_sorted = dict(sorted(dispos_par_enfant.items(), key=lambda x: x[1]))
+    st.write(dispos_sorted)
+    
+    # Calculer le taux de remplissage cible
+    taux_remplissage = st.slider(
+        "Taux de remplissage cible (%)",
+        min_value=30,
+        max_value=100,
+        value=50,
+        help="Pourcentage des disponibilités à utiliser. Ex: 50% = si quelqu'un est dispo 10 fois, il sera affecté ~5 fois"
     )
+    
+    # Calculer le max pour chaque enfant (proportionnel à ses dispos)
+    max_par_enfant = {}
+    for nom, nb_dispos in dispos_par_enfant.items():
+        max_par_enfant[nom] = max(1, round(nb_dispos * taux_remplissage / 100))
+    
+    st.info(f"Max occurrences calculé par enfant (basé sur {taux_remplissage}% de leurs dispos)")
+    max_sorted = dict(sorted(max_par_enfant.items(), key=lambda x: x[1]))
+    st.write(max_sorted)
 
     # =====================================================
     # 5️⃣ BINÔMES
@@ -185,8 +207,8 @@ if uploaded_file:
                         a in dispos and b in dispos
                         and a not in creneau['affectes']
                         and b not in creneau['affectes']
-                        and compteur[a] < max_occ_global
-                        and compteur[b] < max_occ_global
+                        and compteur[a] < max_par_enfant[a]
+                        and compteur[b] < max_par_enfant[b]
                         and len(creneau['affectes']) <= max_par_date - 2
                     ):
                         min_a = min([(date_horaire_dt - d).days for d in affectations[a]] + [float('inf')])
@@ -211,7 +233,7 @@ if uploaded_file:
                 for n in dispos:
                     if (
                         n not in creneau['affectes']
-                        and compteur[n] < max_occ_global
+                        and compteur[n] < max_par_enfant[n]
                     ):
                         distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                         if distance >= DELAI_MINIMUM:
