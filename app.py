@@ -217,8 +217,8 @@ if uploaded_file:
                             score = compteur[a] + compteur[b]
                             binomes_ok.append((a, b, score))
                 
-                # Prendre le binôme le moins affecté
-                binomes_ok.sort(key=lambda x: x[2])
+                # Prendre le binôme le moins affecté (en ratio)
+                binomes_ok.sort(key=lambda x: (x[2] / (max_par_enfant[x[0]] + max_par_enfant[x[1]])))
                 if binomes_ok:
                     a, b, _ = binomes_ok[0]
                     creneau['affectes'].extend([a, b])
@@ -228,7 +228,7 @@ if uploaded_file:
                     affectations[b].append(date_horaire_dt)
                     affectations_vague += 2
 
-                # SOLO : trier par compteur (les moins affectés en premier)
+                # SOLO : trier par ratio (compteur / max) pour vraie égalité
                 candidats_solo = []
                 for n in dispos:
                     if (
@@ -237,9 +237,10 @@ if uploaded_file:
                     ):
                         distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                         if distance >= DELAI_MINIMUM:
-                            candidats_solo.append((n, compteur[n]))
+                            ratio = compteur[n] / max_par_enfant[n]
+                            candidats_solo.append((n, ratio))
                 
-                # Trier par compteur uniquement (égalité stricte)
+                # Trier par ratio (égalité proportionnelle)
                 candidats_solo.sort(key=lambda x: x[1])
                 
                 # Prendre seulement jusqu'au max (laisser des places vides si besoin)
