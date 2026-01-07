@@ -210,7 +210,7 @@ if uploaded_file:
                         min_b = min([(date_horaire_dt - d).days for d in affectations[b]] + [float('inf')])
                         if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
                             # Score basé sur compteur et dispos ajustées (comme unité)
-                            score_compteur = compteur[a] + compteur[b]
+                            score_compteur = compteur[a]
                             dispos_binome = dispos_ajustees[a]  # Même valeur pour a et b
                             binomes_ok.append((a, b, score_compteur, dispos_binome))
                 
