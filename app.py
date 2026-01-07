@@ -119,7 +119,7 @@ if uploaded_file:
         # Initialisation (pas de limite max par enfant)
         compteur = {nom: 0 for nom in noms_uniques}
         affectations = {nom: [] for nom in noms_uniques}
-        DELAI_MINIMUM = 7
+        DELAI_MINIMUM = 6  # 6 jours pour éviter mercredi→samedi mais permettre mercredi→mercredi
 
         # Parser les dates en français
         mois_fr = {
