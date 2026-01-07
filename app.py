@@ -64,7 +64,7 @@ if uploaded_file:
     max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_value=min_par_date, max_value=10, value=max(5, min_par_date))
 
     # =====================================================
-    # 4️⃣ CALCUL DES DISPONIBILITÉS
+    # 4️⃣ CALCUL DES DISPONIBILITÉS (avec binômes comme unité)
     # =====================================================
     total_creaneaux = len(df)
     
@@ -77,11 +77,25 @@ if uploaded_file:
             if n in dispos_par_enfant:
                 dispos_par_enfant[n] += 1
     
-    st.subheader("Disponibilités par enfant")
-    dispos_sorted = dict(sorted(dispos_par_enfant.items(), key=lambda x: x[1]))
+    # Ajuster les dispos pour les binômes (les compter comme une unité)
+    dispos_ajustees = dispos_par_enfant.copy()
+    for a, b in binomes:
+        # Compter combien de créneaux où TOUS LES DEUX sont dispos
+        dispos_communs = 0
+        for _, row in df.iterrows():
+            dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
+            dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
+            if a in dispos and b in dispos:
+                dispos_communs += 1
+        # Les deux membres du binôme ont le même nombre de dispos ajustées
+        dispos_ajustees[a] = dispos_communs
+        dispos_ajustees[b] = dispos_communs
+    
+    st.subheader("Disponibilités par enfant (ajustées pour binômes)")
+    dispos_sorted = dict(sorted(dispos_ajustees.items(), key=lambda x: x[1]))
     st.write(dispos_sorted)
     
-    st.info("L'algorithme priorise automatiquement les personnes les moins disponibles")
+    st.info("L'algorithme priorise automatiquement les personnes les moins affectées, puis les moins disponibles")
 
     # =====================================================
     # 5️⃣ BINÔMES
@@ -183,7 +197,7 @@ if uploaded_file:
                 date_horaire_dt = creneau['dt']
                 dispos = creneau['dispos']
                 
-                # BINÔMES en priorité (pas de limite max)
+                # BINÔMES en priorité (utiliser dispos ajustées)
                 binomes_ok = []
                 for a, b in binomes:
                     if (
@@ -195,13 +209,15 @@ if uploaded_file:
                         min_a = min([(date_horaire_dt - d).days for d in affectations[a]] + [float('inf')])
                         min_b = min([(date_horaire_dt - d).days for d in affectations[b]] + [float('inf')])
                         if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
-                            total_dispos = dispos_par_enfant[a] + dispos_par_enfant[b]
-                            binomes_ok.append((a, b, total_dispos))
+                            # Score basé sur compteur et dispos ajustées (comme unité)
+                            score_compteur = compteur[a] + compteur[b]
+                            dispos_binome = dispos_ajustees[a]  # Même valeur pour a et b
+                            binomes_ok.append((a, b, score_compteur, dispos_binome))
                 
-                # Prendre le binôme le moins dispo globalement
-                binomes_ok.sort(key=lambda x: (dispos_par_enfant[x[0]] + dispos_par_enfant[x[1]]))
+                # Prendre le binôme le moins affecté, puis le moins dispo
+                binomes_ok.sort(key=lambda x: (x[2], x[3]))
                 if binomes_ok:
-                    a, b, _ = binomes_ok[0]
+                    a, b, _, _ = binomes_ok[0]
                     creneau['affectes'].extend([a, b])
                     compteur[a] += 1
                     compteur[b] += 1
@@ -209,13 +225,13 @@ if uploaded_file:
                     affectations[b].append(date_horaire_dt)
                     affectations_vague += 2
 
-                # SOLO : trier d'abord par compteur, puis par nb_dispos
+                # SOLO : trier d'abord par compteur, puis par dispos ajustées
                 candidats_solo = []
                 for n in dispos:
                     if n not in creneau['affectes']:
                         distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                         if distance >= DELAI_MINIMUM:
-                            nb_dispos = dispos_par_enfant[n]
+                            nb_dispos = dispos_ajustees[n]
                             candidats_solo.append((n, compteur[n], nb_dispos))
                 
                 # Trier par : 1) compteur (priorité aux moins affectés), 2) nb_dispos (moins dispos en cas d'égalité)
