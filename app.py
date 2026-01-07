@@ -214,14 +214,6 @@ if uploaded_file:
                             dispos_binome = dispos_ajustees[a]  # Même valeur pour a et b
                             binomes_ok.append((a, b, score_compteur, dispos_binome))
 
-                 # SOLO : trier d'abord par compteur, puis par dispos ajustées
-                candidats_solo = []
-                for n in dispos:
-                    if n not in creneau['affectes']:
-                        distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
-                        if distance >= DELAI_MINIMUM:
-                            nb_dispos = dispos_ajustees[n]
-                            candidats_solo.append((n, compteur[n], nb_dispos))
                 
                 # Prendre le binôme le moins affecté, puis le moins dispo
                 binomes_ok.sort(key=lambda x: (x[2], x[3]))
@@ -232,7 +224,16 @@ if uploaded_file:
                     compteur[b] += 1
                     affectations[a].append(date_horaire_dt)
                     affectations[b].append(date_horaire_dt)
-                    affectations_vague += 2
+                    affectations_vague += 1
+
+                # SOLO : trier d'abord par compteur, puis par dispos ajustées
+                candidats_solo = []
+                for n in dispos:
+                    if n not in creneau['affectes']:
+                        distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
+                        if distance >= DELAI_MINIMUM:
+                            nb_dispos = dispos_ajustees[n]
+                            candidats_solo.append((n, compteur[n], nb_dispos))
                 
                 # Trier par : 1) compteur (priorité aux moins affectés), 2) nb_dispos (moins dispos en cas d'égalité)
                 candidats_solo.sort(key=lambda x: (x[1], x[2]))
