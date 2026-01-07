@@ -125,8 +125,9 @@ if uploaded_file:
                 if a in dispos and b in dispos:
                     dispos_communs += 1
             # Les deux membres du binôme ont le même nombre de dispos ajustées
-            dispos_ajustees[a] = dispos_communs
-            dispos_ajustees[b] = dispos_communs
+            dispos_ajustees[a] = max(1, dispos_communs // 2)
+            dispos_ajustees[b] = dispos_ajustees[a]
+
         
         st.info("Dispos ajustées pour binômes : " + ", ".join([f"{a}/{b}={dispos_ajustees[a]}" for a, b in binomes]))
 
@@ -224,7 +225,7 @@ if uploaded_file:
                     compteur[b] += 1
                     affectations[a].append(date_horaire_dt)
                     affectations[b].append(date_horaire_dt)
-                    affectations_vague += 1
+                    affectations_vague += 2
 
                 # SOLO : trier d'abord par compteur, puis par dispos ajustées
                 candidats_solo = []
