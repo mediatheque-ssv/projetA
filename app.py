@@ -209,16 +209,16 @@ if uploaded_file:
                     affectations[b].append(date_horaire_dt)
                     affectations_vague += 2
 
-                # SOLO : trier par nombre de dispos (les moins dispos en premier)
+                # SOLO : trier d'abord par compteur, puis par nb_dispos
                 candidats_solo = []
                 for n in dispos:
                     if n not in creneau['affectes']:
                         distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                         if distance >= DELAI_MINIMUM:
                             nb_dispos = dispos_par_enfant[n]
-                            candidats_solo.append((n, nb_dispos, compteur[n]))
+                            candidats_solo.append((n, compteur[n], nb_dispos))
                 
-                # Trier par : 1) nb_dispos (priorité aux moins dispos), 2) compteur (égalité)
+                # Trier par : 1) compteur (priorité aux moins affectés), 2) nb_dispos (moins dispos en cas d'égalité)
                 candidats_solo.sort(key=lambda x: (x[1], x[2]))
                 
                 # Prendre seulement jusqu'au max (laisser des places vides si besoin)
