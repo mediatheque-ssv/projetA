@@ -64,7 +64,7 @@ if uploaded_file:
     max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_value=min_par_date, max_value=10, value=max(5, min_par_date))
 
     # =====================================================
-    # 4️⃣ CALCUL DES DISPONIBILITÉS (avec binômes comme unité)
+    # 4️⃣ CALCUL DES DISPONIBILITÉS DE BASE
     # =====================================================
     total_creaneaux = len(df)
     
@@ -77,25 +77,9 @@ if uploaded_file:
             if n in dispos_par_enfant:
                 dispos_par_enfant[n] += 1
     
-    # Ajuster les dispos pour les binômes (les compter comme une unité)
-    dispos_ajustees = dispos_par_enfant.copy()
-    for a, b in binomes:
-        # Compter combien de créneaux où TOUS LES DEUX sont dispos
-        dispos_communs = 0
-        for _, row in df.iterrows():
-            dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
-            dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
-            if a in dispos and b in dispos:
-                dispos_communs += 1
-        # Les deux membres du binôme ont le même nombre de dispos ajustées
-        dispos_ajustees[a] = dispos_communs
-        dispos_ajustees[b] = dispos_communs
-    
-    st.subheader("Disponibilités par enfant (ajustées pour binômes)")
-    dispos_sorted = dict(sorted(dispos_ajustees.items(), key=lambda x: x[1]))
+    st.subheader("Disponibilités par enfant")
+    dispos_sorted = dict(sorted(dispos_par_enfant.items(), key=lambda x: x[1]))
     st.write(dispos_sorted)
-    
-    st.info("L'algorithme priorise automatiquement les personnes les moins affectées, puis les moins disponibles")
 
     # =====================================================
     # 5️⃣ BINÔMES
@@ -129,6 +113,22 @@ if uploaded_file:
     # 6️⃣ RÉPARTITION PAR VAGUES SUCCESSIVES
     # =====================================================
     if st.button("Répartir les enfants"):
+
+        # Ajuster les dispos pour les binômes (les compter comme une unité)
+        dispos_ajustees = dispos_par_enfant.copy()
+        for a, b in binomes:
+            # Compter combien de créneaux où TOUS LES DEUX sont dispos
+            dispos_communs = 0
+            for _, row in df.iterrows():
+                dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
+                dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
+                if a in dispos and b in dispos:
+                    dispos_communs += 1
+            # Les deux membres du binôme ont le même nombre de dispos ajustées
+            dispos_ajustees[a] = dispos_communs
+            dispos_ajustees[b] = dispos_communs
+        
+        st.info("Dispos ajustées pour binômes : " + ", ".join([f"{a}/{b}={dispos_ajustees[a]}" for a, b in binomes]))
 
         # Initialisation (pas de limite max par enfant)
         compteur = {nom: 0 for nom in noms_uniques}
