@@ -121,8 +121,8 @@ if uploaded_file:
             dispos_communs = 0
             for _, row in df.iterrows():
                 dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
-                dispos_creneau = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
-                if a in dispos_creneau and b in dispos_creneau:
+                dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
+                if a in dispos and b in dispos:
                     dispos_communs += 1
             # Les deux membres du binôme ont le même nombre de dispos ajustées
             dispos_ajustees[a] = dispos_communs
@@ -213,9 +213,7 @@ if uploaded_file:
                         if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
                             score_compteur = compteur[a] + compteur[b]
                             dispos_binome = dispos_ajustees[a]
-                            # Bonus si très peu dispo (< 5 créneaux)
-                            bonus = -100 if dispos_binome < 5 else 0
-                            candidats.append(('binome', (a, b), score_compteur + bonus, dispos_binome))
+                            candidats.append(('binome', (a, b), score_compteur, dispos_binome))
                 
                 # SOLOS
                 for n in dispos:
@@ -223,9 +221,7 @@ if uploaded_file:
                         distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                         if distance >= DELAI_MINIMUM:
                             nb_dispos = dispos_ajustees[n]
-                            # Bonus si très peu dispo (< 5 créneaux)
-                            bonus = -100 if nb_dispos < 5 else 0
-                            candidats.append(('solo', n, compteur[n] + bonus, nb_dispos))
+                            candidats.append(('solo', n, compteur[n], nb_dispos))
                 
                 # Trier tous les candidats ensemble : 1) compteur, 2) dispos
                 candidats.sort(key=lambda x: (x[2], x[3]))
@@ -254,16 +250,7 @@ if uploaded_file:
             if affectations_vague == 0:
                 break
         
-        # Copier les résultats dans repartition (avec déduplication)
-        for creneau in creneaux_info:
-            # Dédupliquer les affectations (au cas où)
-            affectes_uniques = []
-            vus = set()
-            for nom in creneau['affectes']:
-                if nom not in vus:
-                    affectes_uniques.append(nom)
-                    vus.add(nom)
-            creneau['affectes'] = affectes_uniques
+        # NE PAS compléter automatiquement le min - laisser des places vides si nécessaire
 
         # =====================================================
         # 7️⃣ TRI ET AFFICHAGE
