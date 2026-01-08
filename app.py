@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import random
 
-st.title("Répartition mini-b")
+st.title("Répartition égalitaire bénévoles / enfants (étalée)")
 
 # =====================================================
 # 1️⃣ IMPORT DU CSV
