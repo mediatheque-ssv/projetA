@@ -125,9 +125,8 @@ if uploaded_file:
                 if a in dispos and b in dispos:
                     dispos_communs += 1
             # Les deux membres du binôme ont le même nombre de dispos ajustées
-            dispos_ajustees[a] = max(1, dispos_communs // 2)
-            dispos_ajustees[b] = dispos_ajustees[a]
-
+            dispos_ajustees[a] = dispos_communs
+            dispos_ajustees[b] = dispos_communs
         
         st.info("Dispos ajustées pour binômes : " + ", ".join([f"{a}/{b}={dispos_ajustees[a]}" for a, b in binomes]))
 
@@ -198,8 +197,10 @@ if uploaded_file:
                 date_horaire_dt = creneau['dt']
                 dispos = creneau['dispos']
                 
-                # BINÔMES en priorité (utiliser dispos ajustées)
-                binomes_ok = []
+                # Créer une liste unifiée de candidats (binômes + solos)
+                candidats = []
+                
+                # BINÔMES
                 for a, b in binomes:
                     if (
                         a in dispos and b in dispos
@@ -210,42 +211,41 @@ if uploaded_file:
                         min_a = min([(date_horaire_dt - d).days for d in affectations[a]] + [float('inf')])
                         min_b = min([(date_horaire_dt - d).days for d in affectations[b]] + [float('inf')])
                         if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
-                            # Score basé sur compteur et dispos ajustées (comme unité)
                             score_compteur = compteur[a] + compteur[b]
-                            dispos_binome = dispos_ajustees[a]  # Même valeur pour a et b
-                            binomes_ok.append((a, b, score_compteur, dispos_binome))
-
+                            dispos_binome = dispos_ajustees[a]
+                            candidats.append(('binome', (a, b), score_compteur, dispos_binome))
                 
-                # Prendre le binôme le moins affecté, puis le moins dispo
-                binomes_ok.sort(key=lambda x: (x[2], x[3]))
-                if binomes_ok:
-                    a, b, _, _ = binomes_ok[0]
-                    creneau['affectes'].extend([a, b])
-                    compteur[a] += 1
-                    compteur[b] += 1
-                    affectations[a].append(date_horaire_dt)
-                    affectations[b].append(date_horaire_dt)
-                    affectations_vague += 2
-
-                # SOLO : trier d'abord par compteur, puis par dispos ajustées
-                candidats_solo = []
+                # SOLOS
                 for n in dispos:
                     if n not in creneau['affectes']:
                         distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                         if distance >= DELAI_MINIMUM:
                             nb_dispos = dispos_ajustees[n]
-                            candidats_solo.append((n, compteur[n], nb_dispos))
+                            candidats.append(('solo', n, compteur[n], nb_dispos))
                 
-                # Trier par : 1) compteur (priorité aux moins affectés), 2) nb_dispos (moins dispos en cas d'égalité)
-                candidats_solo.sort(key=lambda x: (x[1], x[2]))
+                # Trier tous les candidats ensemble : 1) compteur, 2) dispos
+                candidats.sort(key=lambda x: (x[2], x[3]))
                 
-                # Prendre seulement jusqu'au max (laisser des places vides si besoin)
-                places_dispo = max_par_date - len(creneau['affectes'])
-                for nom, _, _ in candidats_solo[:places_dispo]:
-                    creneau['affectes'].append(nom)
-                    compteur[nom] += 1
-                    affectations[nom].append(date_horaire_dt)
-                    affectations_vague += 1
+                # Affecter les candidats dans l'ordre jusqu'au max
+                for candidat in candidats:
+                    type_cand = candidat[0]
+                    
+                    if type_cand == 'binome':
+                        a, b = candidat[1]
+                        if len(creneau['affectes']) <= max_par_date - 2:
+                            creneau['affectes'].extend([a, b])
+                            compteur[a] += 1
+                            compteur[b] += 1
+                            affectations[a].append(date_horaire_dt)
+                            affectations[b].append(date_horaire_dt)
+                            affectations_vague += 2
+                    else:  # solo
+                        nom = candidat[1]
+                        if len(creneau['affectes']) < max_par_date:
+                            creneau['affectes'].append(nom)
+                            compteur[nom] += 1
+                            affectations[nom].append(date_horaire_dt)
+                            affectations_vague += 1
             
             if affectations_vague == 0:
                 break
