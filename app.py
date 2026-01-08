@@ -121,8 +121,8 @@ if uploaded_file:
             dispos_communs = 0
             for _, row in df.iterrows():
                 dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
-                dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
-                if a in dispos and b in dispos:
+                dispos_creneau = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
+                if a in dispos_creneau and b in dispos_creneau:
                     dispos_communs += 1
             # Les deux membres du binôme ont le même nombre de dispos ajustées
             dispos_ajustees[a] = dispos_communs
