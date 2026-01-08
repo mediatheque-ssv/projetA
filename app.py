@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import random
 
-st.title("Répartition égalitaire bénévoles / enfants (étalée)")
+st.title("Répartition mini-b")
 
 # =====================================================
 # 1️⃣ IMPORT DU CSV
@@ -213,7 +213,9 @@ if uploaded_file:
                         if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
                             score_compteur = compteur[a] + compteur[b]
                             dispos_binome = dispos_ajustees[a]
-                            candidats.append(('binome', (a, b), score_compteur, dispos_binome))
+                            # Bonus si très peu dispo (< 5 créneaux)
+                            bonus = -100 if dispos_binome < 5 else 0
+                            candidats.append(('binome', (a, b), score_compteur + bonus, dispos_binome))
                 
                 # SOLOS
                 for n in dispos:
@@ -221,7 +223,9 @@ if uploaded_file:
                         distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                         if distance >= DELAI_MINIMUM:
                             nb_dispos = dispos_ajustees[n]
-                            candidats.append(('solo', n, compteur[n], nb_dispos))
+                            # Bonus si très peu dispo (< 5 créneaux)
+                            bonus = -100 if nb_dispos < 5 else 0
+                            candidats.append(('solo', n, compteur[n] + bonus, nb_dispos))
                 
                 # Trier tous les candidats ensemble : 1) compteur, 2) dispos
                 candidats.sort(key=lambda x: (x[2], x[3]))
