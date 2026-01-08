@@ -254,7 +254,16 @@ if uploaded_file:
             if affectations_vague == 0:
                 break
         
-        # NE PAS compléter automatiquement le min - laisser des places vides si nécessaire
+        # Copier les résultats dans repartition (avec déduplication)
+        for creneau in creneaux_info:
+            # Dédupliquer les affectations (au cas où)
+            affectes_uniques = []
+            vus = set()
+            for nom in creneau['affectes']:
+                if nom not in vus:
+                    affectes_uniques.append(nom)
+                    vus.add(nom)
+            creneau['affectes'] = affectes_uniques
 
         # =====================================================
         # 7️⃣ TRI ET AFFICHAGE
