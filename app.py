@@ -89,8 +89,24 @@ if uploaded_file:
     # 3️⃣ PARAMÈTRES DES CRÉNEAUX
     # =====================================================
     st.markdown("## ⚙️ Paramètres des créneaux")
-    min_par_date = st.slider("Nombre minimal de PERSONNES par créneau", min_value=1, max_value=10, value=4)
-    max_par_date = st.slider("Nombre maximal de PERSONNES par créneau", min_value=min_par_date, max_value=10, value=max(5, min_par_date))
+    col1, col2 = st.columns(2)
+
+    with col1:
+        min_par_date = st.slider(
+            "👥 Minimum de personnes par créneau",
+            min_value=1,
+            max_value=10,
+            value=4
+        )
+
+    with col2:
+        max_par_date = st.slider(
+            "👥 Maximum de personnes par créneau",
+            min_value=min_par_date,
+            max_value=10,
+            value=max(5, min_par_date)
+        )
+
 
     # =====================================================
     # 4️⃣ CALCUL DES DISPONIBILITÉS
