@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#7C3AED"            # violet principal
+backgroundColor = "#FAF7FF"         # fond très clair légèrement violacé
+secondaryBackgroundColor = "#EDE9FE"
+textColor = "#1F1B2E"
+font = "sans serif"
