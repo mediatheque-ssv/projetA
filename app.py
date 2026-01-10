@@ -78,12 +78,33 @@ if uploaded_file:
     })
 
     st.markdown("## 🧒 Enfants et binômes détectés")
+
     if noms_uniques:
-        st.write(noms_uniques)
-        st.info(f"Séparateur détecté : '{separator}'. Les binômes doivent être notés 'Nom1/Nom2' dans le CSV.")
+        df_noms = pd.DataFrame(
+            {
+                "Enfant / binôme": noms_uniques,
+                "Type": [
+                    "Binôme" if "/" in nom else "Enfant seul"
+                    for nom in noms_uniques
+                ]
+            }
+        )
+
+        st.dataframe(
+            df_noms,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.info(
+            f"🔎 {len(noms_uniques)} entité(s) détectée(s) • "
+            f"Séparateur utilisé : '{separator}' • "
+            "Les binômes doivent être notés sous la forme Nom1/Nom2"
+        )
     else:
         st.warning("Aucun enfant détecté ! Vérifie le CSV")
         st.stop()
+
 
     # =====================================================
     # 3️⃣ PARAMÈTRES DES CRÉNEAUX
