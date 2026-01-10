@@ -127,8 +127,34 @@ if uploaded_file:
                 dispos_par_entite[n] += 1
     
     st.markdown("## 📊 Disponibilités par enfant / binôme")
+
     dispos_sorted = dict(sorted(dispos_par_entite.items(), key=lambda x: x[1]))
-    st.write(dispos_sorted)
+
+    df_dispos = (
+        pd.DataFrame(
+            dispos_sorted.items(),
+            columns=["Enfant / binôme", "Nombre de disponibilités"]
+        )
+        .sort_values("Nombre de disponibilités")
+        .reset_index(drop=True)
+    )
+
+    def style_dispos(val):
+        if val <= 2:
+            return "background-color: #FEE2E2"   # rouge doux
+        elif val <= 4:
+            return "background-color: #FEF9C3"   # jaune doux
+        return ""
+
+    st.dataframe(
+        df_dispos.style.applymap(
+            style_dispos,
+            subset=["Nombre de disponibilités"]
+        ),
+        use_container_width=True,
+        hide_index=True
+    )
+
 
     # =====================================================
     # 5️⃣ RÉPARTITION AUTOMATIQUE
@@ -246,8 +272,36 @@ if uploaded_file:
             )
 
         st.markdown("## 🔁 Occurrences par enfant / binôme")
+
         compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
-        st.write(compteur_sorted)
+
+        df_occ = (
+            pd.DataFrame(
+                compteur_sorted.items(),
+                columns=["Enfant / binôme", "Nombre d'occurrences"]
+            )
+            .sort_values("Nombre d'occurrences")
+            .reset_index(drop=True)
+        )
+
+        max_occ = df_occ["Nombre d'occurrences"].max()
+
+        def style_occ(val):
+            if val == 0:
+                return "background-color: #FEE2E2"   # jamais affecté
+            elif val == max_occ:
+                return "background-color: #DDD6FE"   # violet clair (le plus sollicité)
+            return ""
+
+        st.dataframe(
+            df_occ.style.applymap(
+                style_occ,
+                subset=["Nombre d'occurrences"]
+            ),
+            use_container_width=True,
+            hide_index=True
+        )
+
 
         jamais_affectes = [nom for nom, c in compteur.items() if c == 0]
         if jamais_affectes:
