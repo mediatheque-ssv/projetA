@@ -157,10 +157,6 @@ if uploaded_file:
                     distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                     if distance >= DELAI_MINIMUM:
                         nb_dispos = dispos_par_entite[n]
-                        # Vérifier qu'on n'a pas déjà atteint le max
-                        if compteur[n] >= max_occ_personne:
-                            continue
-                        
                         # Bonus pour les très peu dispos
                         bonus = -100 if nb_dispos < 5 else 0
                         # Facteur aléatoire léger pour varier d'un trimestre à l'autre
@@ -178,28 +174,6 @@ if uploaded_file:
                     compteur[nom] += 1
                     affectations[nom].append(date_horaire_dt)
                     nb_personnes_affectees += nb_personnes_ce_nom
-
-        # Compléter pour atteindre le minimum d'occurrences
-        st.info("🔄 Vérification des minimums d'occurrences...")
-        
-        for nom in noms_uniques:
-            if compteur[nom] < min_occ_personne and dispos_par_entite[nom] >= min_occ_personne:
-                # Chercher des créneaux où on peut ajouter cette personne
-                for creneau in creneaux_info:
-                    if compteur[nom] >= min_occ_personne:
-                        break
-                    
-                    if nom in creneau['dispos'] and nom not in creneau['affectes']:
-                        nb_personnes_affectees = sum(compter_personnes(n) for n in creneau['affectes'])
-                        nb_personnes_ce_nom = compter_personnes(nom)
-                        
-                        if nb_personnes_affectees + nb_personnes_ce_nom <= max_par_date:
-                            # Vérifier le délai
-                            distance = min([(creneau['dt'] - d).days for d in affectations[nom]] + [float('inf')])
-                            if distance >= DELAI_MINIMUM:
-                                creneau['affectes'].append(nom)
-                                compteur[nom] += 1
-                                affectations[nom].append(creneau['dt'])
 
         # =====================================================
         # 6️⃣ TRI ET AFFICHAGE
