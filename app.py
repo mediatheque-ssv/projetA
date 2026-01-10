@@ -181,7 +181,7 @@ if uploaded_file:
     # 5️⃣ RÉPARTITION AUTOMATIQUE
     # =====================================================
     st.markdown("---")
-    st.markdown("## ▶️ 5. Lancer la répartition")
+    st.markdown("## ▶️ Lancer la répartition")
     if st.button("Répartir les enfants"):
 
         # Initialisation
