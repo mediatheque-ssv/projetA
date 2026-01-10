@@ -2,7 +2,11 @@ import streamlit as st
 import pandas as pd
 import random
 
-st.title("Répartition mini-bénévoles")
+st.markdown("""
+<h1 style="color:#6D28D9; font-size:2.5em; font-weight:800; text-align:center; margin-bottom:0.5em;">
+Répartition mini-bénévoles
+</h1>
+""", unsafe_allow_html=True)
 
 # =====================================================
 # STYLE GÉNÉRAL (boutons et séparateurs)
