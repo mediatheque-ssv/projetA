@@ -4,6 +4,34 @@ import random
 
 st.title("Répartition mini-bénévoles")
 
+st.markdown("""
+<style>
+/* Bouton principal */
+.stButton>button {
+    background-color: #6D28D9;
+    color: white;
+    border-radius: 12px;
+    padding: 0.6em 1.2em;
+    font-size: 1.05em;
+    font-weight: 600;
+}
+
+/* Bouton au survol */
+.stButton>button:hover {
+    background-color: #5B21B6;
+    color: white;
+}
+
+/* Séparateurs visuels */
+hr {
+    border: none;
+    height: 2px;
+    background-color: #DDD6FE;
+    margin: 1.5em 0;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # =====================================================
 # 1️⃣ IMPORT DU CSV
 # =====================================================
