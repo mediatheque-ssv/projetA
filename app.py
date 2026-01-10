@@ -35,6 +35,7 @@ hr {
 # =====================================================
 # 1️⃣ IMPORT DU CSV
 # =====================================================
+
 uploaded_file = st.file_uploader(
     "Importer le CSV (Date ; Horaires ; Noms_dispos)",
     type=["csv"]
@@ -57,8 +58,9 @@ if uploaded_file:
             f"Colonnes détectées : {df.columns.tolist()}"
         )
         st.stop()
-
-    st.subheader("Aperçu du CSV")
+        
+    st.markdown("## 📂 1. Import du CSV")
+    st.markdown("### Aperçu du CSV")
     st.dataframe(df)
 
     # =====================================================
@@ -76,7 +78,7 @@ if uploaded_file:
         if n.strip()
     })
 
-    st.subheader("Enfants/Binômes détectés")
+    st.markdown("## 🧒 2. Enfants et binômes détectés")
     if noms_uniques:
         st.write(noms_uniques)
         st.info(f"Séparateur détecté : '{separator}'. Les binômes doivent être notés 'Nom1/Nom2' dans le CSV.")
@@ -87,7 +89,7 @@ if uploaded_file:
     # =====================================================
     # 3️⃣ PARAMÈTRES DES CRÉNEAUX
     # =====================================================
-    st.subheader("Paramètres des créneaux")
+    st.markdown("## ⚙️ 3. Paramètres des créneaux")
     min_par_date = st.slider("Nombre minimal de PERSONNES par créneau", min_value=1, max_value=10, value=4)
     max_par_date = st.slider("Nombre maximal de PERSONNES par créneau", min_value=min_par_date, max_value=10, value=max(5, min_par_date))
 
