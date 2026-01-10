@@ -110,13 +110,15 @@ if uploaded_file:
             if n in dispos_par_entite:
                 dispos_par_entite[n] += 1
     
-    st.subheader("Disponibilités par enfant/binôme")
+    st.markdown("## 📊 Disponibilités par enfant / binôme")
     dispos_sorted = dict(sorted(dispos_par_entite.items(), key=lambda x: x[1]))
     st.write(dispos_sorted)
 
     # =====================================================
     # 5️⃣ RÉPARTITION AUTOMATIQUE
     # =====================================================
+    st.markdown("---")
+    st.markdown("## ▶️ 5. Lancer la répartition")
     if st.button("Répartir les enfants"):
 
         # Initialisation
