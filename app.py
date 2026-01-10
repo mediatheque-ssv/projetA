@@ -1,8 +1,4 @@
 import streamlit as st
-st.set_page_config(
-    page_title="Répartition mini-bénévoles",
-    layout="wide"  # ← ça rend la page large
-)
 import pandas as pd
 import random
 
