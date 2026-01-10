@@ -2,8 +2,16 @@ import streamlit as st
 import pandas as pd
 import random
 
+st.set_page_config(
+    page_title="Répartition mini-bénévoles",
+    layout="wide"
+)
+
 st.title("Répartition mini-bénévoles")
 
+# =====================================================
+# 🎨 STYLE
+# =====================================================
 st.markdown("""
 <style>
 .stButton>button {
@@ -16,7 +24,6 @@ st.markdown("""
 }
 .stButton>button:hover {
     background-color: #5B21B6;
-    color: white;
 }
 hr {
     border: none;
@@ -28,7 +35,7 @@ hr {
 """, unsafe_allow_html=True)
 
 # =====================================================
-# 1️⃣ IMPORT DU CSV
+# 1️⃣ IMPORT CSV
 # =====================================================
 st.markdown("## 📂 Import du CSV")
 uploaded_file = st.file_uploader(
@@ -36,183 +43,197 @@ uploaded_file = st.file_uploader(
     type=["csv"]
 )
 
-if uploaded_file:
-    try:
-        df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
-    except Exception as e:
-        st.error(f"Erreur de lecture du CSV : {e}")
-        st.stop()
+if not uploaded_file:
+    st.stop()
 
-    df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
+df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
+df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
 
-    if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
-        st.error("Le CSV doit contenir EXACTEMENT les colonnes : Date, Horaires, Noms_dispos")
-        st.stop()
+# =====================================================
+# 2️⃣ EXTRACTION DES NOMS
+# =====================================================
+sample_cell = str(df["Noms_dispos"].iloc[0])
+separator = "," if "," in sample_cell else ";"
 
-    st.dataframe(df)
+noms_uniques = sorted({
+    n.strip()
+    for cell in df["Noms_dispos"]
+    if pd.notna(cell)
+    for n in str(cell).split(separator)
+    if n.strip()
+})
 
-    # =====================================================
-    # 2️⃣ EXTRACTION DES NOMS
-    # =====================================================
-    sample_cell = str(df["Noms_dispos"].iloc[0]) if len(df) > 0 else ""
-    separator = "," if "," in sample_cell else ";"
+st.markdown("## 🧒 Enfants et binômes détectés")
+df_noms = pd.DataFrame({
+    "Enfant / binôme": noms_uniques,
+    "Type": ["Binôme" if "/" in n else "Enfant seul" for n in noms_uniques]
+})
+st.dataframe(df_noms, use_container_width=True, hide_index=True)
 
-    noms_uniques = sorted({
-        n.strip()
-        for cell in df["Noms_dispos"]
-        if pd.notna(cell)
-        for n in str(cell).split(separator)
-        if n.strip()
-    })
+# =====================================================
+# 3️⃣ PARAMÈTRES
+# =====================================================
+st.markdown("## ⚙️ Paramètres")
 
-    st.markdown("## 🧒 Enfants et binômes détectés")
+col1, col2 = st.columns(2)
+with col1:
+    min_par_date = st.slider("👥 Minimum par créneau", 1, 10, 4)
+with col2:
+    max_par_date = st.slider("👥 Maximum par créneau", min_par_date, 10, 6)
 
-    df_noms = pd.DataFrame({
-        "Enfant / binôme": noms_uniques,
-        "Type": ["Binôme" if "/" in n else "Enfant seul" for n in noms_uniques]
-    })
+col3, col4 = st.columns(2)
+with col3:
+    min_occ_personne = st.slider("🔽 Minimum d'occurrences par enfant / binôme", 0, 10, 3)
+with col4:
+    max_occ_personne = st.slider("🔼 Maximum d'occurrences par enfant / binôme", min_occ_personne, 20, 5)
 
-    st.dataframe(df_noms, use_container_width=True, hide_index=True)
+# =====================================================
+# 4️⃣ DISPONIBILITÉS
+# =====================================================
+def compter_personnes(nom):
+    return len(nom.split("/"))
 
-    # =====================================================
-    # 3️⃣ PARAMÈTRES
-    # =====================================================
-    st.markdown("## ⚙️ Paramètres")
+dispos_par_entite = {nom: 0 for nom in noms_uniques}
+for _, row in df.iterrows():
+    for n in str(row["Noms_dispos"]).split(separator):
+        n = n.strip()
+        if n in dispos_par_entite:
+            dispos_par_entite[n] += 1
 
-    col1, col2 = st.columns(2)
-    with col1:
-        min_par_date = st.slider("Minimum par créneau", 1, 10, 4)
-    with col2:
-        max_par_date = st.slider("Maximum par créneau", min_par_date, 10, max(5, min_par_date))
+# =====================================================
+# 5️⃣ FONCTION DE RÉPARTITION (🔧 clé)
+# =====================================================
+def lancer_repartition():
+    compteur = {nom: 0 for nom in noms_uniques}
+    affectations = {nom: [] for nom in noms_uniques}
 
-    col3, col4 = st.columns(2)
-    with col3:
-        min_occ_personne = st.slider("Minimum d'occurrences par enfant/binôme", 0, 10, 3)
-    with col4:
-        max_occ_personne = st.slider("Maximum d'occurrences par enfant/binôme", min_occ_personne, 20, 5)
+    mois_fr = {
+        'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
+        'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
+        'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
+    }
 
-    # =====================================================
-    # 4️⃣ DISPONIBILITÉS
-    # =====================================================
-    def compter_personnes(nom):
-        return len(nom.split("/"))
+    def parse_dt(row):
+        try:
+            parts = str(row["Date"]).lower().split()
+            jour = int(parts[1])
+            mois = mois_fr.get(parts[2], 1)
+            heure = int(str(row["Horaires"]).split("h")[0])
+            return pd.Timestamp(2026, mois, jour, heure)
+        except:
+            return pd.Timestamp("1900-01-01")
 
-    dispos_par_entite = {nom: 0 for nom in noms_uniques}
-    for _, row in df.iterrows():
-        dispos = str(row["Noms_dispos"]).split(separator)
-        for n in dispos:
-            n = n.strip()
-            if n in dispos_par_entite:
-                dispos_par_entite[n] += 1
+    df_sorted = df.copy()
+    df_sorted["dt"] = df_sorted.apply(parse_dt, axis=1)
+    df_sorted = df_sorted.sort_values("dt")
 
-    # =====================================================
-    # 5️⃣ RÉPARTITION
-    # =====================================================
-    if st.button("Répartir les enfants"):
-
-        compteur = {nom: 0 for nom in noms_uniques}
-        affectations = {nom: [] for nom in noms_uniques}
-        DELAI_MINIMUM = 6
-
-        mois_fr = {
-            'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
-            'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
-            'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
-        }
-
-        def parse_dt(row):
-            try:
-                d = row["Date"].lower().split()
-                jour = int(d[1])
-                mois = mois_fr[d[2]]
-                heure = int(row["Horaires"].replace("h", "").split(":")[0])
-                return pd.Timestamp(year=2026, month=mois, day=jour, hour=heure)
-            except:
-                return pd.Timestamp("1900-01-01")
-
-        df_sorted = df.copy()
-        df_sorted["dt"] = df_sorted.apply(parse_dt, axis=1)
-        df_sorted = df_sorted.sort_values("dt")
-
-        creneaux_info = []
-        for _, row in df_sorted.iterrows():
-            dispos = [n.strip() for n in str(row["Noms_dispos"]).split(separator) if n.strip()]
-            dispos = [n for n in dispos if n in compteur]
-
-            creneaux_info.append({
-                "cle": f"{row['Date']} | {row['Horaires']}",
-                "dt": row["dt"],
-                "dispos": dispos,
-                "affectes": []
-            })
-
-        # ---- PASSAGE PRINCIPAL
-        for creneau in creneaux_info:
-            nb_pers = 0
-            candidats = []
-
-            for n in creneau["dispos"]:
-                if compteur[n] >= max_occ_personne:
-                    continue
-
-                dist = min([(creneau["dt"] - d).days for d in affectations[n]] + [999])
-                if dist >= DELAI_MINIMUM:
-                    bonus = -100 if dispos_par_entite[n] < 5 else 0
-                    candidats.append((n, compteur[n] + bonus + random.random()))
-
-            candidats.sort(key=lambda x: x[1])
-
-            for nom, _ in candidats:
-                if nb_pers + compter_personnes(nom) <= max_par_date:
-                    creneau["affectes"].append(nom)
-                    compteur[nom] += 1
-                    affectations[nom].append(creneau["dt"])
-                    nb_pers += compter_personnes(nom)
-
-        # ---- RATTRAPAGE DU MINIMUM (CORRIGÉ)
-        for nom in noms_uniques:
-            while (
-                compteur[nom] < min_occ_personne
-                and compteur[nom] < max_occ_personne
-                and dispos_par_entite[nom] >= min_occ_personne
-            ):
-                ajouté = False
-                for creneau in creneaux_info:
-                    if nom in creneau["dispos"] and nom not in creneau["affectes"]:
-                        nb_pers = sum(compter_personnes(n) for n in creneau["affectes"])
-                        if nb_pers + compter_personnes(nom) <= max_par_date:
-                            creneau["affectes"].append(nom)
-                            compteur[nom] += 1
-                            affectations[nom].append(creneau["dt"])
-                            ajouté = True
-                            break
-                if not ajouté:
-                    break
-
-        # =====================================================
-        # 6️⃣ ALERTES MIN NON RESPECTÉ
-        # =====================================================
-        non_respect_min = [
-            nom for nom, c in compteur.items()
-            if c < min_occ_personne and dispos_par_entite[nom] >= min_occ_personne
+    creneaux = []
+    for _, row in df_sorted.iterrows():
+        dispos = [
+            n.strip() for n in str(row["Noms_dispos"]).split(separator)
+            if n.strip() in compteur
         ]
+        creneaux.append({
+            "cle": f"{row['Date']} | {row['Horaires']}",
+            "dt": row["dt"],
+            "dispos": dispos,
+            "affectes": []
+        })
 
-        if non_respect_min:
-            st.warning(
-                "⚠️ Minimum d'occurrences impossible à respecter pour :\n\n"
-                + ", ".join(non_respect_min)
-                + "\n\n➡️ Contraintes trop fortes (créneaux pleins, délai, binômes…)."
-            )
+    DELAI_MINIMUM = 6
 
-        # =====================================================
-        # 7️⃣ AFFICHAGE
-        # =====================================================
-        st.markdown("## 🧩 Répartition finale")
-        for c in creneaux_info:
-            enfants = []
-            for e in c["affectes"]:
-                enfants.extend(e.split("/"))
-            st.write(f"{c['cle']} : {', '.join(enfants) if enfants else 'Aucun'}")
+    # ---- Passage principal
+    for c in creneaux:
+        nb_pers = 0
+        candidats = []
 
-        df_occ = pd.DataFrame(compteur.items(), columns=["Enfant / binôme", "Occurrences"])
-        st.dataframe(df_occ.sort_values("Occurrences"), use_container_width=True)
+        for n in c["dispos"]:
+            if compteur[n] >= max_occ_personne:
+                continue
+            dist = min([(c["dt"] - d).days for d in affectations[n]] + [999])
+            if dist >= DELAI_MINIMUM:
+                score = compteur[n] + random.uniform(-0.5, 0.5)
+                candidats.append((n, score))
+
+        candidats.sort(key=lambda x: x[1])
+
+        for n, _ in candidats:
+            if nb_pers + compter_personnes(n) <= max_par_date:
+                c["affectes"].append(n)
+                compteur[n] += 1
+                affectations[n].append(c["dt"])
+                nb_pers += compter_personnes(n)
+
+    # ---- Rattrapage minimum
+    for n in noms_uniques:
+        while (
+            compteur[n] < min_occ_personne
+            and compteur[n] < max_occ_personne
+            and dispos_par_entite[n] >= min_occ_personne
+        ):
+            ajouté = False
+            for c in creneaux:
+                if n in c["dispos"] and n not in c["affectes"]:
+                    nb_pers = sum(compter_personnes(x) for x in c["affectes"])
+                    if nb_pers + compter_personnes(n) <= max_par_date:
+                        c["affectes"].append(n)
+                        compteur[n] += 1
+                        affectations[n].append(c["dt"])
+                        ajouté = True
+                        break
+            if not ajouté:
+                break
+
+    return creneaux, compteur
+
+# =====================================================
+# 6️⃣ MULTI-TENTATIVES (🔧 correction majeure)
+# =====================================================
+if st.button("▶️ Lancer la répartition"):
+    meilleure = None
+    meilleur_compteur = None
+
+    for _ in range(30):
+        creneaux, compteur = lancer_repartition()
+        non_ok = [
+            n for n, c in compteur.items()
+            if c < min_occ_personne and dispos_par_entite[n] >= min_occ_personne
+        ]
+        if not non_ok:
+            meilleure = creneaux
+            meilleur_compteur = compteur
+            break
+        if meilleure is None:
+            meilleure = creneaux
+            meilleur_compteur = compteur
+
+    # =====================================================
+    # 7️⃣ AFFICHAGE
+    # =====================================================
+    st.markdown("## 🧩 Répartition finale")
+    for c in meilleure:
+        enfants = []
+        for e in c["affectes"]:
+            enfants.extend(e.split("/"))
+        st.write(f"{c['cle']} : {', '.join(enfants) if enfants else 'Aucun'}")
+
+    st.markdown("## 🔁 Occurrences par enfant / binôme")
+    st.dataframe(
+        pd.DataFrame(
+            meilleur_compteur.items(),
+            columns=["Enfant / binôme", "Occurrences"]
+        ).sort_values("Occurrences"),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    non_ok = [
+        n for n, c in meilleur_compteur.items()
+        if c < min_occ_personne and dispos_par_entite[n] >= min_occ_personne
+    ]
+    if non_ok:
+        st.warning(
+            "⚠️ Le minimum n’a pas pu être atteint pour : "
+            + ", ".join(non_ok)
+            + "\n➡️ Une répartition optimale a été choisie malgré tout."
+        )
