@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import random
 
 st.title("Répartition égalitaire bénévoles / enfants (étalée)")
 
@@ -34,9 +33,9 @@ if uploaded_file:
     st.dataframe(df)
 
     # =====================================================
-    # 2️⃣ EXTRACTION DES NOMS
+    # 2️⃣ EXTRACTION DES NOMS (avec binômes groupés)
     # =====================================================
-    # Détection automatique du séparateur (virgule ou point-virgule)
+    # Détection automatique du séparateur
     sample_cell = str(df["Noms_dispos"].iloc[0]) if len(df) > 0 else ""
     separator = "," if "," in sample_cell else ";"
     
@@ -48,10 +47,10 @@ if uploaded_file:
         if n.strip()
     })
 
-    st.subheader("Enfants détectés")
+    st.subheader("Enfants/Binômes détectés")
     if noms_uniques:
         st.write(noms_uniques)
-        st.info(f"Séparateur détecté : '{separator}'")
+        st.info(f"Séparateur détecté : '{separator}'. Les binômes doivent être notés 'Nom1/Nom2' dans le CSV.")
     else:
         st.warning("Aucun enfant détecté ! Vérifie le CSV")
         st.stop()
@@ -60,80 +59,40 @@ if uploaded_file:
     # 3️⃣ PARAMÈTRES DES CRÉNEAUX
     # =====================================================
     st.subheader("Paramètres des créneaux")
-    min_par_date = st.slider("Nombre minimal d'enfants par créneau", min_value=1, max_value=10, value=4)
-    max_par_date = st.slider("Nombre maximal d'enfants par créneau", min_value=min_par_date, max_value=10, value=max(5, min_par_date))
+    min_par_date = st.slider("Nombre minimal de PERSONNES par créneau", min_value=1, max_value=10, value=4)
+    max_par_date = st.slider("Nombre maximal de PERSONNES par créneau", min_value=min_par_date, max_value=10, value=max(5, min_par_date))
 
     # =====================================================
-    # 4️⃣ CALCUL DES DISPONIBILITÉS DE BASE
+    # 4️⃣ CALCUL DES DISPONIBILITÉS
     # =====================================================
     total_creaneaux = len(df)
     
-    # Calculer les dispos de chaque enfant
-    dispos_par_enfant = {nom: 0 for nom in noms_uniques}
+    # Compter les personnes réelles (binômes = 2 personnes)
+    def compter_personnes(nom):
+        return len(nom.split("/"))
+    
+    # Calculer les dispos de chaque entité
+    dispos_par_entite = {nom: 0 for nom in noms_uniques}
     for _, row in df.iterrows():
         dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
         dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
         for n in dispos:
-            if n in dispos_par_enfant:
-                dispos_par_enfant[n] += 1
+            if n in dispos_par_entite:
+                dispos_par_entite[n] += 1
     
-    st.subheader("Disponibilités par enfant")
-    dispos_sorted = dict(sorted(dispos_par_enfant.items(), key=lambda x: x[1]))
+    st.subheader("Disponibilités par enfant/binôme")
+    dispos_sorted = dict(sorted(dispos_par_entite.items(), key=lambda x: x[1]))
     st.write(dispos_sorted)
 
     # =====================================================
-    # 5️⃣ BINÔMES
-    # =====================================================
-    st.subheader("Binômes à ne pas séparer")
-    if "binomes" not in st.session_state:
-        st.session_state.binomes = []
-
-    col1, col2 = st.columns(2)
-    with col1:
-        enfant_a = st.selectbox("Enfant A", noms_uniques, key="a")
-    with col2:
-        enfant_b = st.selectbox("Enfant B", noms_uniques, key="b")
-
-    if (
-        enfant_a != enfant_b
-        and st.button("Ajouter le binôme")
-        and (enfant_a, enfant_b) not in st.session_state.binomes
-        and (enfant_b, enfant_a) not in st.session_state.binomes
-    ):
-        st.session_state.binomes.append((enfant_a, enfant_b))
-
-    if st.session_state.binomes:
-        st.write("Binômes définis :")
-        for a, b in st.session_state.binomes:
-            st.write(f"- {a} + {b}")
-
-    binomes = st.session_state.binomes
-
-    # =====================================================
-    # 6️⃣ RÉPARTITION PAR VAGUES SUCCESSIVES
+    # 5️⃣ RÉPARTITION AUTOMATIQUE
     # =====================================================
     if st.button("Répartir les enfants"):
 
-        # Ajuster les dispos pour les binômes (les compter comme une unité)
-        dispos_ajustees = dispos_par_enfant.copy()
-        for a, b in binomes:
-            # Compter combien de créneaux où TOUS LES DEUX sont dispos
-            dispos_communs = 0
-            for _, row in df.iterrows():
-                dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
-                dispos_creneau = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
-                if a in dispos_creneau and b in dispos_creneau:
-                    dispos_communs += 1
-            # Les deux membres du binôme ont le même nombre de dispos ajustées
-            dispos_ajustees[a] = dispos_communs
-            dispos_ajustees[b] = dispos_communs
-        
-        st.info("Dispos ajustées pour binômes : " + ", ".join([f"{a}/{b}={dispos_ajustees[a]}" for a, b in binomes]))
-
-        # Initialisation (pas de limite max par enfant)
+        # Initialisation
         compteur = {nom: 0 for nom in noms_uniques}
         affectations = {nom: [] for nom in noms_uniques}
-        DELAI_MINIMUM = 6  # 6 jours pour éviter mercredi→samedi mais permettre mercredi→mercredi
+        DELAI_MINIMUM = 6
 
         # Parser les dates en français
         mois_fr = {
@@ -171,7 +130,6 @@ if uploaded_file:
             horaire = str(row["Horaires"]).strip() or "00:00"
             dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
             dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
-            # Filtrer pour garder seulement les noms reconnus
             dispos = [n for n in dispos if n in compteur]
             
             cle = f"{date} | {horaire}"
@@ -182,119 +140,79 @@ if uploaded_file:
                 'affectes': []
             })
 
-        # Algorithme par vagues avec priorité égalité stricte
-        vague = 0
-        
-        while vague < 50:
-            vague += 1
-            affectations_vague = 0
-            
-            # Traiter les créneaux dans l'ordre chrono (pas de shuffle)
-            for creneau in creneaux_info:
-                if len(creneau['affectes']) >= max_par_date:
-                    continue
-                
-                date_horaire_dt = creneau['dt']
-                dispos = creneau['dispos']
-                
-                # Créer une liste unifiée de candidats (binômes + solos)
-                candidats = []
-                
-                # BINÔMES
-                for a, b in binomes:
-                    if (
-                        a in dispos and b in dispos
-                        and a not in creneau['affectes']
-                        and b not in creneau['affectes']
-                        and len(creneau['affectes']) <= max_par_date - 2
-                    ):
-                        min_a = min([(date_horaire_dt - d).days for d in affectations[a]] + [float('inf')])
-                        min_b = min([(date_horaire_dt - d).days for d in affectations[b]] + [float('inf')])
-                        if min_a >= DELAI_MINIMUM and min_b >= DELAI_MINIMUM:
-                            score_compteur = compteur[a] + compteur[b]
-                            dispos_binome = dispos_ajustees[a]
-                            # Bonus si très peu dispo (< 5 créneaux)
-                            bonus = -100 if dispos_binome < 5 else 0
-                            candidats.append(('binome', (a, b), score_compteur + bonus, dispos_binome))
-                
-                # SOLOS
-                for n in dispos:
-                    if n not in creneau['affectes']:
-                        distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
-                        if distance >= DELAI_MINIMUM:
-                            nb_dispos = dispos_ajustees[n]
-                            # Bonus si très peu dispo (< 5 créneaux)
-                            bonus = -100 if nb_dispos < 5 else 0
-                            candidats.append(('solo', n, compteur[n] + bonus, nb_dispos))
-                
-                # Trier tous les candidats ensemble : 1) compteur, 2) dispos
-                candidats.sort(key=lambda x: (x[2], x[3]))
-                
-                # Affecter les candidats dans l'ordre jusqu'au max
-                for candidat in candidats:
-                    type_cand = candidat[0]
-                    
-                    if type_cand == 'binome':
-                        a, b = candidat[1]
-                        if len(creneau['affectes']) <= max_par_date - 2:
-                            creneau['affectes'].extend([a, b])
-                            compteur[a] += 1
-                            compteur[b] += 1
-                            affectations[a].append(date_horaire_dt)
-                            affectations[b].append(date_horaire_dt)
-                            affectations_vague += 2
-                    else:  # solo
-                        nom = candidat[1]
-                        if len(creneau['affectes']) < max_par_date:
-                            creneau['affectes'].append(nom)
-                            compteur[nom] += 1
-                            affectations[nom].append(date_horaire_dt)
-                            affectations_vague += 1
-            
-            if affectations_vague == 0:
-                break
-        
-        # Copier les résultats dans repartition (avec déduplication)
+        # Algorithme en UN SEUL PASSAGE
         for creneau in creneaux_info:
-            # Dédupliquer les affectations (au cas où)
-            affectes_uniques = []
-            vus = set()
-            for nom in creneau['affectes']:
-                if nom not in vus:
-                    affectes_uniques.append(nom)
-                    vus.add(nom)
-            creneau['affectes'] = affectes_uniques
+            date_horaire_dt = creneau['dt']
+            dispos = creneau['dispos']
+            
+            # Compter les personnes déjà affectées
+            nb_personnes_affectees = sum(compter_personnes(n) for n in creneau['affectes'])
+            
+            # Créer liste de candidats
+            candidats = []
+            
+            for n in dispos:
+                if n not in creneau['affectes']:
+                    distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
+                    if distance >= DELAI_MINIMUM:
+                        nb_dispos = dispos_par_entite[n]
+                        # Bonus pour les très peu dispos
+                        bonus = -100 if nb_dispos < 5 else 0
+                        candidats.append((n, compteur[n] + bonus, nb_dispos))
+            
+            # Trier : 1) compteur (avec bonus), 2) nb_dispos
+            candidats.sort(key=lambda x: (x[1], x[2]))
+            
+            # Affecter jusqu'au max de PERSONNES
+            for nom, _, _ in candidats:
+                nb_personnes_ce_nom = compter_personnes(nom)
+                if nb_personnes_affectees + nb_personnes_ce_nom <= max_par_date:
+                    creneau['affectes'].append(nom)
+                    compteur[nom] += 1
+                    affectations[nom].append(date_horaire_dt)
+                    nb_personnes_affectees += nb_personnes_ce_nom
 
         # =====================================================
-        # 7️⃣ TRI ET AFFICHAGE
+        # 6️⃣ TRI ET AFFICHAGE
         # =====================================================
         creneaux_info.sort(key=lambda x: x['dt'])
 
         st.subheader("Répartition finale (triée par date et horaire)")
         for creneau in creneaux_info:
-            enfants = creneau['affectes']
+            enfants_raw = creneau['affectes']
+            # Décomposer les binômes pour l'affichage
+            enfants_affichage = []
+            for e in enfants_raw:
+                if "/" in e:
+                    enfants_affichage.extend(e.split("/"))
+                else:
+                    enfants_affichage.append(e)
+            
+            nb_personnes = len(enfants_affichage)
             st.write(
-                f"{creneau['cle']} : {', '.join(enfants) if enfants else 'Aucun'} "
-                f"({max_par_date - len(enfants)} place(s) restante(s))"
+                f"{creneau['cle']} : {', '.join(enfants_affichage) if enfants_affichage else 'Aucun'} "
+                f"({max_par_date - nb_personnes} place(s) restante(s))"
             )
 
-        st.subheader("Occurrences par enfant")
+        st.subheader("Occurrences par enfant/binôme")
         compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
         st.write(compteur_sorted)
 
         jamais_affectes = [nom for nom, c in compteur.items() if c == 0]
         if jamais_affectes:
-            st.subheader("Enfants jamais affectés")
+            st.subheader("Enfants/binômes jamais affectés")
             st.write(", ".join(jamais_affectes))
 
         # =====================================================
-        # 8️⃣ EXPORT CSV
+        # 7️⃣ EXPORT CSV
         # =====================================================
         export_df = pd.DataFrame([
             {
                 "Date_Horaire": creneau['cle'],
-                "Enfants_affectés": separator.join(creneau['affectes']),
-                "Places_restantes": max_par_date - len(creneau['affectes'])
+                "Enfants_affectés": separator.join([
+                    e.replace("/", " et ") for e in creneau['affectes']
+                ]),
+                "Places_restantes": max_par_date - sum(compter_personnes(n) for n in creneau['affectes'])
             }
             for creneau in creneaux_info
         ])
