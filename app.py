@@ -2,40 +2,11 @@ import streamlit as st
 import pandas as pd
 import random
 
-st.title("Répartition mini-bénévoles")
-
-st.markdown("""
-<style>
-/* Bouton principal */
-.stButton>button {
-    background-color: #6D28D9;
-    color: white;
-    border-radius: 12px;
-    padding: 0.6em 1.2em;
-    font-size: 1.05em;
-    font-weight: 600;
-}
-
-/* Bouton au survol */
-.stButton>button:hover {
-    background-color: #5B21B6;
-    color: white;
-}
-
-/* Séparateurs visuels */
-hr {
-    border: none;
-    height: 2px;
-    background-color: #DDD6FE;
-    margin: 1.5em 0;
-}
-</style>
-""", unsafe_allow_html=True)
+st.title("Répartition égalitaire bénévoles / enfants (étalée)")
 
 # =====================================================
 # 1️⃣ IMPORT DU CSV
 # =====================================================
-st.markdown("## 📂 Import du CSV")
 uploaded_file = st.file_uploader(
     "Importer le CSV (Date ; Horaires ; Noms_dispos)",
     type=["csv"]
@@ -58,8 +29,8 @@ if uploaded_file:
             f"Colonnes détectées : {df.columns.tolist()}"
         )
         st.stop()
-        
-    st.markdown("### Aperçu du CSV")
+
+    st.subheader("Aperçu du CSV")
     st.dataframe(df)
 
     # =====================================================
@@ -77,57 +48,20 @@ if uploaded_file:
         if n.strip()
     })
 
-    st.markdown("## 🧒 Enfants et binômes détectés")
-
+    st.subheader("Enfants/Binômes détectés")
     if noms_uniques:
-        df_noms = pd.DataFrame(
-            {
-                "Enfant / binôme": noms_uniques,
-                "Type": [
-                    "Binôme" if "/" in nom else "Enfant seul"
-                    for nom in noms_uniques
-                ]
-            }
-        )
-
-        st.dataframe(
-            df_noms,
-            use_container_width=True,
-            hide_index=True
-        )
-
-        st.info(
-            f"🔎 {len(noms_uniques)} entité(s) détectée(s) • "
-            f"Séparateur utilisé : '{separator}' • "
-            "Les binômes doivent être notés sous la forme Nom1/Nom2"
-        )
+        st.write(noms_uniques)
+        st.info(f"Séparateur détecté : '{separator}'. Les binômes doivent être notés 'Nom1/Nom2' dans le CSV.")
     else:
         st.warning("Aucun enfant détecté ! Vérifie le CSV")
         st.stop()
 
-
     # =====================================================
     # 3️⃣ PARAMÈTRES DES CRÉNEAUX
     # =====================================================
-    st.markdown("## ⚙️ Paramètres des créneaux")
-    col1, col2 = st.columns(2)
-
-    with col1:
-        min_par_date = st.slider(
-            "👥 Minimum de personnes par créneau",
-            min_value=1,
-            max_value=10,
-            value=4
-        )
-
-    with col2:
-        max_par_date = st.slider(
-            "👥 Maximum de personnes par créneau",
-            min_value=min_par_date,
-            max_value=10,
-            value=max(5, min_par_date)
-        )
-
+    st.subheader("Paramètres des créneaux")
+    min_par_date = st.slider("Nombre minimal de PERSONNES par créneau", min_value=1, max_value=10, value=4)
+    max_par_date = st.slider("Nombre maximal de PERSONNES par créneau", min_value=min_par_date, max_value=10, value=max(5, min_par_date))
 
     # =====================================================
     # 4️⃣ CALCUL DES DISPONIBILITÉS
@@ -147,41 +81,13 @@ if uploaded_file:
             if n in dispos_par_entite:
                 dispos_par_entite[n] += 1
     
-    st.markdown("## 📊 Disponibilités par enfant / binôme")
-
+    st.subheader("Disponibilités par enfant/binôme")
     dispos_sorted = dict(sorted(dispos_par_entite.items(), key=lambda x: x[1]))
-
-    df_dispos = (
-        pd.DataFrame(
-            dispos_sorted.items(),
-            columns=["Enfant / binôme", "Nombre de disponibilités"]
-        )
-        .sort_values("Nombre de disponibilités")
-        .reset_index(drop=True)
-    )
-
-    def style_dispos(val):
-        if val <= 2:
-            return "background-color: #FEE2E2"   # rouge doux
-        elif val <= 4:
-            return "background-color: #FEF9C3"   # jaune doux
-        return ""
-
-    st.dataframe(
-        df_dispos.style.applymap(
-            style_dispos,
-            subset=["Nombre de disponibilités"]
-        ),
-        use_container_width=True,
-        hide_index=True
-    )
-
+    st.write(dispos_sorted)
 
     # =====================================================
     # 5️⃣ RÉPARTITION AUTOMATIQUE
     # =====================================================
-    st.markdown("---")
-    st.markdown("## ▶️ Lancer la répartition")
     if st.button("Répartir les enfants"):
 
         # Initialisation
@@ -251,14 +157,17 @@ if uploaded_file:
                     distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                     if distance >= DELAI_MINIMUM:
                         nb_dispos = dispos_par_entite[n]
+                        # Vérifier qu'on n'a pas déjà atteint le max
+                        if compteur[n] >= max_occ_personne:
+                            continue
+                        
                         # Bonus pour les très peu dispos
                         bonus = -100 if nb_dispos < 5 else 0
-                        # Facteur aléatoire pour varier d'un trimestre à l'autre
-                        alea_compteur = random.uniform(-0.5, 0.5)
-                        alea_dispos = random.uniform(-1, 1)
-                        candidats.append((n, compteur[n] + bonus + alea_compteur, nb_dispos + alea_dispos))
+                        # Facteur aléatoire léger pour varier d'un trimestre à l'autre
+                        alea = random.uniform(-0.3, 0.3)
+                        candidats.append((n, compteur[n] + bonus + alea, nb_dispos))
             
-            # Trier : 1) compteur (avec bonus + aléa), 2) nb_dispos (avec aléa)
+            # Trier : 1) compteur (avec bonus + aléa léger), 2) nb_dispos
             candidats.sort(key=lambda x: (x[1], x[2]))
             
             # Affecter jusqu'au max de PERSONNES
@@ -270,12 +179,34 @@ if uploaded_file:
                     affectations[nom].append(date_horaire_dt)
                     nb_personnes_affectees += nb_personnes_ce_nom
 
+        # Compléter pour atteindre le minimum d'occurrences
+        st.info("🔄 Vérification des minimums d'occurrences...")
+        
+        for nom in noms_uniques:
+            if compteur[nom] < min_occ_personne and dispos_par_entite[nom] >= min_occ_personne:
+                # Chercher des créneaux où on peut ajouter cette personne
+                for creneau in creneaux_info:
+                    if compteur[nom] >= min_occ_personne:
+                        break
+                    
+                    if nom in creneau['dispos'] and nom not in creneau['affectes']:
+                        nb_personnes_affectees = sum(compter_personnes(n) for n in creneau['affectes'])
+                        nb_personnes_ce_nom = compter_personnes(nom)
+                        
+                        if nb_personnes_affectees + nb_personnes_ce_nom <= max_par_date:
+                            # Vérifier le délai
+                            distance = min([(creneau['dt'] - d).days for d in affectations[nom]] + [float('inf')])
+                            if distance >= DELAI_MINIMUM:
+                                creneau['affectes'].append(nom)
+                                compteur[nom] += 1
+                                affectations[nom].append(creneau['dt'])
+
         # =====================================================
         # 6️⃣ TRI ET AFFICHAGE
         # =====================================================
         creneaux_info.sort(key=lambda x: x['dt'])
 
-        st.markdown("## 🧩 Répartition finale")
+        st.subheader("Répartition finale (triée par date et horaire)")
         for creneau in creneaux_info:
             enfants_raw = creneau['affectes']
             # Décomposer les binômes pour l'affichage
@@ -292,41 +223,13 @@ if uploaded_file:
                 f"({max_par_date - nb_personnes} place(s) restante(s))"
             )
 
-        st.markdown("## 🔁 Occurrences par enfant / binôme")
-
+        st.subheader("Occurrences par enfant/binôme")
         compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
-
-        df_occ = (
-            pd.DataFrame(
-                compteur_sorted.items(),
-                columns=["Enfant / binôme", "Nombre d'occurrences"]
-            )
-            .sort_values("Nombre d'occurrences")
-            .reset_index(drop=True)
-        )
-
-        max_occ = df_occ["Nombre d'occurrences"].max()
-
-        def style_occ(val):
-            if val == 0:
-                return "background-color: #FEE2E2"   # jamais affecté
-            elif val == max_occ:
-                return "background-color: #DDD6FE"   # violet clair (le plus sollicité)
-            return ""
-
-        st.dataframe(
-            df_occ.style.applymap(
-                style_occ,
-                subset=["Nombre d'occurrences"]
-            ),
-            use_container_width=True,
-            hide_index=True
-        )
-
+        st.write(compteur_sorted)
 
         jamais_affectes = [nom for nom, c in compteur.items() if c == 0]
         if jamais_affectes:
-            st.markdown("## ⚠️ Enfants / binômes jamais affectés")
+            st.subheader("Enfants/binômes jamais affectés")
             st.write(", ".join(jamais_affectes))
 
         # =====================================================
