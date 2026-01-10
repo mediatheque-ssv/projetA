@@ -157,7 +157,7 @@ if uploaded_file:
                     if distance >= DELAI_MINIMUM:
                         nb_dispos = dispos_par_entite[n]
                         # Bonus pour les très peu dispos
-                        bonus = -100 if nb_dispos < 5 else 0
+                        bonus = -min(nb_dispos, 10)
                         candidats.append((n, compteur[n] + bonus, nb_dispos))
             
             # Trier : 1) compteur (avec bonus), 2) nb_dispos
