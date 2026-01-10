@@ -212,7 +212,7 @@ if uploaded_file:
         # =====================================================
         creneaux_info.sort(key=lambda x: x['dt'])
 
-        st.subheader("Répartition finale (triée par date et horaire)")
+        st.markdown("## 🧩 Répartition finale")
         for creneau in creneaux_info:
             enfants_raw = creneau['affectes']
             # Décomposer les binômes pour l'affichage
@@ -229,13 +229,13 @@ if uploaded_file:
                 f"({max_par_date - nb_personnes} place(s) restante(s))"
             )
 
-        st.subheader("Occurrences par enfant/binôme")
+        st.markdown("## 🔁 Occurrences par enfant / binôme")
         compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
         st.write(compteur_sorted)
 
         jamais_affectes = [nom for nom, c in compteur.items() if c == 0]
         if jamais_affectes:
-            st.subheader("Enfants/binômes jamais affectés")
+            st.markdown("## ⚠️ Enfants / binômes jamais affectés")
             st.write(", ".join(jamais_affectes))
 
         # =====================================================
