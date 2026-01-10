@@ -128,16 +128,15 @@ if uploaded_file:
             value=max(5, min_par_date)
         )
 
-    st.markdown("## 🎯 Limites d'occurrences par enfant/binôme")
     st.info("💡 Ces limites permettent d'éviter les répartitions extrêmes")
 
     col3, col4 = st.columns(2)
 
     with col3:
-        min_occ_personne = st.slider("🔽 Minimum d'occurrences", 0, 10, 3)
+        min_occ_personne = st.slider("🔽 Minimum d'occurrences par enfant / binôme", 0, 10, 3)
 
     with col4:
-        max_occ_personne = st.slider("🔼 Maximum d'occurrences", min_occ_personne, 20, 5)
+        max_occ_personne = st.slider("🔼 Maximum d'occurrences par enfant / binôme", min_occ_personne, 20, 5)
 
     # =====================================================
     # 4️⃣ CALCUL DES DISPONIBILITÉS
@@ -260,6 +259,8 @@ if uploaded_file:
                 if n not in creneau['affectes']:
                     distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                     if distance >= DELAI_MINIMUM:
+                        if compteur[n] >= max_occ_personne:
+                            continue
                         nb_dispos = dispos_par_entite[n]
                         # Bonus pour les très peu dispos
                         bonus = -100 if nb_dispos < 5 else 0
@@ -279,6 +280,20 @@ if uploaded_file:
                     compteur[nom] += 1
                     affectations[nom].append(date_horaire_dt)
                     nb_personnes_affectees += nb_personnes_ce_nom
+
+            for nom in noms_uniques:
+                if compteur[nom] < min_occ_personne and dispos_par_entite[nom] >= min_occ_personne:
+                    for creneau in creneaux_info:
+                        if compteur[nom] >= min_occ_personne:
+                            break
+                        if nom in creneau['dispos'] and nom not in creneau['affectes']:
+                            nb_pers = sum(compter_personnes(n) for n in creneau['affectes'])
+                            if nb_pers + compter_personnes(nom) <= max_par_date:
+                                dist = min([(creneau['dt'] - d).days for d in affectations[nom]] + [float('inf')])
+                                if dist >= DELAI_MINIMUM:
+                                    creneau['affectes'].append(nom)
+                                    compteur[nom] += 1
+                                    affectations[nom].append(creneau['dt'])
 
         # =====================================================
         # 6️⃣ TRI ET AFFICHAGE
