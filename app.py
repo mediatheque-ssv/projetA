@@ -5,11 +5,10 @@ import random
 st.title("Répartition mini-bénévoles")
 
 # =====================================================
-# STYLE GÉNÉRAL
+# STYLE GÉNÉRAL (boutons et séparateurs)
 # =====================================================
 st.markdown("""
 <style>
-/* Bouton principal */
 .stButton>button {
     background-color: #6D28D9;
     color: white;
@@ -18,14 +17,10 @@ st.markdown("""
     font-size: 1.05em;
     font-weight: 600;
 }
-
-/* Bouton au survol */
 .stButton>button:hover {
     background-color: #5B21B6;
     color: white;
 }
-
-/* Séparateurs visuels */
 hr {
     border: none;
     height: 2px;
@@ -132,8 +127,6 @@ if uploaded_file:
     # =====================================================
     # 4️⃣ CALCUL DES DISPONIBILITÉS
     # =====================================================
-    total_creaneaux = len(df)
-    
     def compter_personnes(nom):
         return len(nom.split("/"))
     
@@ -146,44 +139,11 @@ if uploaded_file:
                 dispos_par_entite[n] += 1
     
     st.markdown("## 📊 Disponibilités par enfant / binôme")
-
-    # Trier les dispos
-    dispos_sorted = dict(sorted(dispos_par_entite.items(), key=lambda x: x[1]))
     df_dispos = pd.DataFrame(
-        dispos_sorted.items(),
+        sorted(dispos_par_entite.items(), key=lambda x: x[1]),
         columns=["Enfant / binôme", "Nombre de disponibilités"]
-    ).sort_values("Nombre de disponibilités").reset_index(drop=True)
-
-    # Ajouter colonne d'indicateur emoji
-    def indicateur_dispo(val):
-        if val <= 2:
-            return "🟥"   # peu disponible
-        elif val <= 4:
-            return "🟨"   # moyen
-        else:
-            return "🟩"   # confortable
-
-    df_dispos['Indicateur'] = df_dispos["Nombre de disponibilités"].apply(indicateur_dispo)
-
-    # Styles de fond plus visibles
-    def style_dispos(val):
-        if val <= 2:
-            return "background-color: #FF6B6B; color: black"  # rouge visible
-        elif val <= 4:
-            return "background-color: #FFD93D; color: black"  # jaune
-        else:
-            return "background-color: #8BC34A; color: black"  # vert
-
-    st.dataframe(
-        df_dispos.style.applymap(
-            style_dispos,
-            subset=["Nombre de disponibilités"]
-        ),
-        use_container_width=True,
-        hide_index=True
-    )
-
-    st.caption("🟥 Peu disponible • 🟨 Moyen • 🟩 Confortable")
+    ).reset_index(drop=True)
+    st.dataframe(df_dispos, use_container_width=True, hide_index=True)
 
     # =====================================================
     # 5️⃣ RÉPARTITION AUTOMATIQUE
@@ -192,12 +152,10 @@ if uploaded_file:
     st.markdown("## ▶️ 5. Lancer la répartition")
     if st.button("Répartir les enfants"):
 
-        # Initialisation
         compteur = {nom: 0 for nom in noms_uniques}
         affectations = {nom: [] for nom in noms_uniques}
         DELAI_MINIMUM = 6
 
-        # Parser les dates en français
         mois_fr = {
             'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
             'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
@@ -208,16 +166,13 @@ if uploaded_file:
             try:
                 date_str = str(row['Date']).strip().lower()
                 horaire_str = str(row['Horaires']).strip()
-                
                 parts = date_str.split()
                 jour = int(parts[1]) if len(parts) > 1 else 1
                 mois_nom = parts[2] if len(parts) > 2 else 'janvier'
                 mois = mois_fr.get(mois_nom, 1)
-                
                 horaire_str = horaire_str.replace('h', ':00') if 'h' in horaire_str else horaire_str
                 heure = int(horaire_str.split(':')[0]) if ':' in horaire_str else 0
                 minute = int(horaire_str.split(':')[1]) if ':' in horaire_str and len(horaire_str.split(':')) > 1 else 0
-                
                 return pd.Timestamp(year=2026, month=mois, day=jour, hour=heure, minute=minute)
             except:
                 return pd.to_datetime("1900-01-01 00:00")
@@ -226,7 +181,6 @@ if uploaded_file:
         df_sorted['dt'] = df_sorted.apply(parse_dt, axis=1)
         df_sorted = df_sorted.sort_values("dt")
 
-        # Préparer les créneaux
         creneaux_info = []
         for _, row in df_sorted.iterrows():
             date = str(row["Date"]).strip() or "1900-01-01"
@@ -234,16 +188,10 @@ if uploaded_file:
             dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
             dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
             dispos = [n for n in dispos if n in compteur]
-            
             cle = f"{date} | {horaire}"
-            creneaux_info.append({
-                'cle': cle,
-                'dt': row['dt'],
-                'dispos': dispos,
-                'affectes': []
-            })
+            creneaux_info.append({'cle': cle, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
 
-        # Algorithme en UN SEUL PASSAGE
+        # Affectation
         for creneau in creneaux_info:
             date_horaire_dt = creneau['dt']
             dispos = creneau['dispos']
@@ -268,10 +216,9 @@ if uploaded_file:
                     nb_personnes_affectees += nb_personnes_ce_nom
 
         # =====================================================
-        # 6️⃣ TRI ET AFFICHAGE
+        # 6️⃣ AFFICHAGE FINAL
         # =====================================================
         creneaux_info.sort(key=lambda x: x['dt'])
-
         st.markdown("## 🧩 Répartition finale")
         for creneau in creneaux_info:
             enfants_raw = creneau['affectes']
@@ -287,34 +234,11 @@ if uploaded_file:
                 f"({max_par_date - nb_personnes} place(s) restante(s))"
             )
 
+        # Occurrences
         st.markdown("## 🔁 Occurrences par enfant / binôme")
         compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
-        df_occ = pd.DataFrame(
-            compteur_sorted.items(),
-            columns=["Enfant / binôme", "Nombre d'occurrences"]
-        ).sort_values("Nombre d'occurrences").reset_index(drop=True)
-
-        max_occ = df_occ["Nombre d'occurrences"].max()
-
-        # Style occurrences
-        def style_occ(val):
-            if val == 0:
-                return "background-color: #FF6B6B; color: black"   # jamais affecté = rouge
-            elif val == max_occ:
-                return "background-color: #B39DD7; color: black"   # le plus sollicité = violet clair
-            else:
-                return ""
-
-        st.dataframe(
-            df_occ.style.applymap(
-                style_occ,
-                subset=["Nombre d'occurrences"]
-            ),
-            use_container_width=True,
-            hide_index=True
-        )
-
-        st.caption("🔴 Jamais affecté • 🟣 Plus sollicité")
+        df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
+        st.dataframe(df_occ, use_container_width=True, hide_index=True)
 
         # Jamais affectés
         jamais_affectes = [nom for nom, c in compteur.items() if c == 0]
@@ -328,14 +252,11 @@ if uploaded_file:
         export_df = pd.DataFrame([
             {
                 "Date_Horaire": creneau['cle'],
-                "Enfants_affectés": separator.join([
-                    e.replace("/", " et ") for e in creneau['affectes']
-                ]),
+                "Enfants_affectés": separator.join([e.replace("/", " et ") for e in creneau['affectes']]),
                 "Places_restantes": max_par_date - sum(compter_personnes(n) for n in creneau['affectes'])
             }
             for creneau in creneaux_info
         ])
-
         csv = export_df.to_csv(index=False, sep=";").encode("utf-8")
         st.download_button(
             "Télécharger la répartition CSV",
