@@ -1,217 +1,312 @@
 import streamlit as st
 import pandas as pd
 import random
-import re
-from io import BytesIO
-
+import io
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from reportlab.pdfgen import canvas
 from reportlab.lib import colors
+from reportlab.platypus import Table, TableStyle
 
-# =============================
-# SESSION STATE (OBLIGATOIRE)
-# =============================
-if "repartition" not in st.session_state:
-    st.session_state.repartition = None
+# ===========================
+# STYLE
+# ===========================
+st.markdown("""
+<style>
+.stMarkdown p { font-size: 14px; }
+.stButton>button {
+    background-color: #6D28D9;
+    color: white;
+    border-radius: 12px;
+    padding: 0.6em 1.2em;
+    font-size: 1.05em;
+    font-weight: 600;
+}
+.stButton>button:hover {
+    background-color: #5B21B6;
+    color: white;
+}
+hr { border: none; height: 2px; background-color: #DDD6FE; margin: 1.5em 0; }
+</style>
 
-if "compteur" not in st.session_state:
-    st.session_state.compteur = None
+<h1 style="
+    color: #6D28D9; 
+    font-size: 2.5em; 
+    font-weight: 800; 
+    text-align: center; 
+    margin-bottom: 0.5em;
+    font-variant: small-caps;
+">
+répartition mini-bénévoles
+</h1>
+""", unsafe_allow_html=True)
 
-if "output_excel" not in st.session_state:
-    st.session_state.output_excel = None
-
-if "output_pdf" not in st.session_state:
-    st.session_state.output_pdf = None
-
-# =============================
-# CONFIG
-# =============================
-st.set_page_config(page_title="Répartition bénévoles", layout="wide")
-st.title("Répartition des mini-bénévoles")
-
-# =============================
-# SAISIE MANUELLE
-# =============================
-st.subheader("Saisie des créneaux")
-
-data = st.data_editor(
-    pd.DataFrame(
-        columns=["DATE", "HORAIRES", "NOMS DES MINI-BÉNÉVOLES"]
-    ),
-    num_rows="dynamic",
-    use_container_width=True
+# ===========================
+# IMPORT CSV
+# ===========================
+st.markdown("## 📂 Import du CSV")
+uploaded_file = st.file_uploader(
+    "Importer le CSV",
+    type=["csv"],
+    help=(
+        "• Le CSV doit contenir exactement les colonnes : 'Date', 'Horaires' et 'Noms_dispos'.  \n"
+        "• Chaque nom de bénévole doit être séparé par un point-virgule (Nom1;Nom2;Nom3).  \n"
+        "• Pour un binôme, mettre un slash entre les deux noms (Nom1/Nom2).  \n"
+        "• Attention à toujours orthographier les noms de la même manière."
+    )
 )
 
-# =============================
-# VALIDATION
-# =============================
-def validate(df):
-    errors = []
+if uploaded_file:
 
-    date_pattern = re.compile(r"^\d{2}/\d{2}/\d{4}$")
-    horaire_pattern = re.compile(r"^(10h|15h)$")
-    noms_pattern = re.compile(r"^[^;]+(;[^;]+)*$")
+    # Lecture CSV
+    try:
+        df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
+    except Exception as e:
+        st.error(f"Erreur de lecture du CSV : {e}")
+        st.stop()
 
-    for i, r in df.iterrows():
-        if not date_pattern.match(str(r["DATE"])):
-            errors.append(f"Ligne {i+1} : date invalide")
-        if not horaire_pattern.match(str(r["HORAIRES"])):
-            errors.append(f"Ligne {i+1} : horaire invalide")
-        if not noms_pattern.match(str(r["NOMS DES MINI-BÉNÉVOLES"])):
-            errors.append(f"Ligne {i+1} : noms invalides (séparés par ;)")
+    df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
 
-    return errors
+    if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
+        st.error(
+            "Le CSV doit contenir EXACTEMENT les colonnes : Date, Horaires, Noms_dispos\n"
+            f"Colonnes détectées : {df.columns.tolist()}"
+        )
+        st.stop()
 
-# =============================
-# RÉPARTITION
-# =============================
-def repartir(df):
-    rows = []
-    compteur = {}
+    # ===========================
+    # EXTRACTION DES NOMS
+    # ===========================
+    sample_cell = str(df["Noms_dispos"].iloc[0]) if len(df) > 0 else ""
+    separator = "," if "," in sample_cell else ";"
+    
+    noms_uniques = sorted({
+        n.strip()
+        for cell in df["Noms_dispos"]
+        if pd.notna(cell)
+        for n in str(cell).split(separator)
+        if n.strip()
+    })
 
-    for _, r in df.iterrows():
-        noms = [n.strip() for n in r["NOMS DES MINI-BÉNÉVOLES"].split(";")]
-        random.shuffle(noms)
-
-        noms_affiches = ", ".join(noms)
-
-        for n in noms:
-            compteur[n] = compteur.get(n, 0) + 1
-
-        horaire = "10h - 11h" if r["HORAIRES"] == "10h" else "15h - 16h"
-
-        rows.append([
-            r["DATE"],
-            horaire,
-            noms_affiches
-        ])
-
-    return rows, compteur
-
-# =============================
-# BOUTONS
-# =============================
-col1, col2 = st.columns(2)
-
-with col1:
-    lancer = st.button("Lancer la répartition")
-
-with col2:
-    relancer = st.button("Relancer avec un autre tirage")
-
-if lancer or relancer:
-    errors = validate(data)
-
-    if errors:
-        for e in errors:
-            st.error(e)
+    st.markdown("## 🧒 Enfants et binômes détectés")
+    if noms_uniques:
+        df_noms = pd.DataFrame(
+            {
+                "Enfant / binôme": noms_uniques,
+                "Type": ["Binôme" if "/" in nom else "Enfant seul" for nom in noms_uniques]
+            }
+        )
+        st.dataframe(df_noms, use_container_width=True, hide_index=True)
+        st.info(f"🔎 {len(noms_uniques)} entité(s) détectée(s)")
     else:
-        repartition, compteur = repartir(data)
-        st.session_state.repartition = repartition
+        st.warning("Aucun enfant détecté ! Vérifie le CSV")
+        st.stop()
+
+    # ===========================
+    # PARAMÈTRES CRÉNEAUX
+    # ===========================
+    st.markdown("## ⚙️ Paramètres des créneaux")
+    col1, col2 = st.columns(2)
+    with col1:
+        min_par_date = st.slider("👥 Minimum de personnes par créneau", 1, 10, 4)
+    with col2:
+        max_par_date = st.slider("👥 Maximum de personnes par créneau", min_par_date, 10, max(5, min_par_date))
+
+    # ===========================
+    # CALCUL DES DISPONIBILITÉS
+    # ===========================
+    def compter_personnes(nom):
+        return len(nom.split("/"))
+    
+    dispos_par_entite = {nom: 0 for nom in noms_uniques}
+    for _, row in df.iterrows():
+        dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
+        dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
+        for n in dispos:
+            if n in dispos_par_entite:
+                dispos_par_entite[n] += 1
+    
+    st.markdown("## 📊 Disponibilités par enfant / binôme")
+    df_dispos = pd.DataFrame(
+        sorted(dispos_par_entite.items(), key=lambda x: x[1]),
+        columns=["Enfant / binôme", "Nombre de disponibilités"]
+    ).reset_index(drop=True)
+    st.dataframe(df_dispos, use_container_width=True, hide_index=True)
+
+    # ===========================
+    # INITIALISATION session_state
+    # ===========================
+    if "repartition" not in st.session_state:
+        st.session_state.repartition = None
+        st.session_state.output_excel = None
+        st.session_state.output_pdf = None
+        st.session_state.compteur = None
+
+    # ===========================
+    # BOUTON RÉPARTITION
+    # ===========================
+    st.markdown("## ▶️ 5. Lancer la répartition")
+    if st.button("Répartir les enfants"):
+
+        compteur = {nom: 0 for nom in noms_uniques}
+        affectations = {nom: [] for nom in noms_uniques}
+        DELAI_MINIMUM = 6
+
+        mois_fr = {
+            'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
+            'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
+            'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
+        }
+
+        def parse_dt(row):
+            try:
+                date_str = str(row['Date']).strip().lower()
+                horaire_str = str(row['Horaires']).strip()
+                parts = date_str.split()
+                jour = int(parts[1]) if len(parts) > 1 else 1
+                mois_nom = parts[2] if len(parts) > 2 else 'janvier'
+                mois = mois_fr.get(mois_nom, 1)
+                horaire_str = horaire_str.replace('h', ':00') if 'h' in horaire_str else horaire_str
+                heure = int(horaire_str.split(':')[0]) if ':' in horaire_str else 0
+                minute = int(horaire_str.split(':')[1]) if ':' in horaire_str and len(horaire_str.split(':')) > 1 else 0
+                return pd.Timestamp(year=2026, month=mois, day=jour, hour=heure, minute=minute)
+            except:
+                return pd.to_datetime("1900-01-01 00:00")
+
+        df_sorted = df.copy()
+        df_sorted['dt'] = df_sorted.apply(parse_dt, axis=1)
+        df_sorted = df_sorted.sort_values("dt")
+
+        creneaux_info = []
+        for _, row in df_sorted.iterrows():
+            date = str(row["Date"]).strip() or "1900-01-01"
+            horaire = str(row["Horaires"]).strip() or "00:00"
+            horaire_export = "10h - 11h" if horaire.startswith("10") else "15h - 16h" if horaire.startswith("15") else horaire
+            dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
+            dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
+            dispos = [n for n in dispos if n in compteur]
+            cle = f"{date} | {horaire_export}"
+            creneaux_info.append({'cle': cle, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
+
+        # Affectation
+        for creneau in creneaux_info:
+            date_horaire_dt = creneau['dt']
+            dispos = creneau['dispos']
+            nb_personnes_affectees = sum(compter_personnes(n) for n in creneau['affectes'])
+            candidats = []
+            for n in dispos:
+                if n not in creneau['affectes']:
+                    distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
+                    if distance >= DELAI_MINIMUM:
+                        nb_dispos = dispos_par_entite[n]
+                        bonus = -100 if nb_dispos < 5 else 0
+                        alea_compteur = random.uniform(-0.5, 0.5)
+                        alea_dispos = random.uniform(-1, 1)
+                        candidats.append((n, compteur[n] + bonus + alea_compteur, nb_dispos + alea_dispos))
+            candidats.sort(key=lambda x: (x[1], x[2]))
+            for nom, _, _ in candidats:
+                nb_personnes_ce_nom = compter_personnes(nom)
+                if nb_personnes_affectees + nb_personnes_ce_nom <= max_par_date:
+                    creneau['affectes'].append(nom)
+                    compteur[nom] += 1
+                    affectations[nom].append(date_horaire_dt)
+                    nb_personnes_affectees += nb_personnes_ce_nom
+
+        # Stocker dans session_state
+        st.session_state.repartition = creneaux_info
         st.session_state.compteur = compteur
 
-# =============================
-# AFFICHAGE
-# =============================
-if st.session_state.repartition is not None:
-    st.subheader("Répartition")
+        # ===========================
+        # EXPORT EXCEL
+        # ===========================
+        export_df = pd.DataFrame([
+            {
+                "DATE": creneau['cle'].split(" | ")[0],
+                "HORAIRES": creneau['cle'].split(" | ")[1],
+                "NOMS DES MINI-BÉNÉVOLES": ", ".join([n for e in creneau['affectes'] for n in e.split("/")])
+            }
+            for creneau in creneaux_info
+        ])
+        output_excel = io.BytesIO()
+        with pd.ExcelWriter(output_excel, engine='xlsxwriter') as writer:
+            export_df.to_excel(writer, index=False, sheet_name="Répartition")
+            workbook = writer.book
+            worksheet = writer.sheets["Répartition"]
+            header_format = workbook.add_format({'bold': True,'valign':'vcenter','align':'center','bg_color':'#F2CEEF','border':1})
+            cell_format = workbook.add_format({'valign':'vcenter','align':'center','border':1})
+            for col_num, value in enumerate(export_df.columns.values):
+                worksheet.write(0, col_num, value, header_format)
+                for row_num, val in enumerate(export_df[value], start=1):
+                    worksheet.write(row_num, col_num, val, cell_format)
+                max_len = max(export_df[value].astype(str).map(len).max(), len(value)) + 2
+                worksheet.set_column(col_num, col_num, max_len)
+            worksheet.set_row(0, 40)
+            for row in range(1, len(export_df)+1):
+                worksheet.set_row(row, 35)
+        st.session_state.output_excel = output_excel
 
-    df_out = pd.DataFrame(
-        st.session_state.repartition,
-        columns=["DATE", "HORAIRES", "NOMS DES MINI-BÉNÉVOLES"]
-    )
+        # ===========================
+        # EXPORT PDF
+        # ===========================
+        output_pdf = io.BytesIO()
+        c = canvas.Canvas(output_pdf, pagesize=A4)
+        width, height = A4
+        c.setFont("Helvetica", 12)
+        data = [["DATE", "HORAIRES", "NOMS DES MINI-BÉNÉVOLES"]]
+        for r in creneaux_info:
+            data.append([r['cle'].split(" | ")[0], r['cle'].split(" | ")[1],
+                         ", ".join([n for e in r['affectes'] for n in e.split("/")])])
+        # Calcul hauteur automatique pour tenir sur une page
+        available_height = height - 100
+        row_height = available_height / len(data)
+        table = Table(data, colWidths=[120, 80, 300], rowHeights=row_height)
+        style = TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#F2CEEF')),
+            ('TEXTCOLOR',(0,0),(-1,0),colors.black),
+            ('ALIGN',(0,0),(-1,-1),'CENTER'),
+            ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+            ('GRID',(0,0),(-1,-1),1,colors.black),
+            ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold')
+        ])
+        table.setStyle(style)
+        table.wrapOn(c, width, height)
+        table.drawOn(c, 30, height - 50 - row_height*len(data))
+        c.showPage()
+        c.save()
+        output_pdf.seek(0)
+        st.session_state.output_pdf = output_pdf
 
-    st.dataframe(df_out, use_container_width=True)
+# ===========================
+# AFFICHAGE RÉPARTITION ET BOUTONS
+# ===========================
+if st.session_state.get("repartition"):
+    repartition = st.session_state.repartition
+    compteur = st.session_state.compteur
+    st.markdown("## 🧩 Répartition finale")
+    for creneau in repartition:
+        enfants_affichage = []
+        for e in creneau['affectes']:
+            enfants_affichage.extend(e.split("/"))
+        nb_personnes = len(enfants_affichage)
+        st.write(f"{creneau['cle']} : {', '.join(enfants_affichage)} ({max_par_date - nb_personnes} place(s) restante(s))")
 
-    st.subheader("Occurrences par bénévole")
-    st.write(
-        pd.DataFrame(
-            st.session_state.compteur.items(),
-            columns=["Nom", "Occurrences"]
-        )
-    )
+    # Affichage occurrences
+    st.markdown("## 🔁 Occurrences par enfant / binôme")
+    compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
+    df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
+    st.dataframe(df_occ, use_container_width=True, hide_index=True)
 
-    # =============================
-    # EXCEL
-    # =============================
-    excel_buffer = BytesIO()
-    with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
-        df_out.to_excel(writer, index=False, sheet_name="Répartition")
-        wb = writer.book
-        ws = writer.sheets["Répartition"]
-
-        header_format = wb.add_format({
-            "bold": True,
-            "border": 1,
-            "align": "center",
-            "valign": "vcenter",
-            "bg_color": "#F2CEEF"
-        })
-
-        cell_format = wb.add_format({
-            "border": 1,
-            "valign": "vcenter"
-        })
-
-        for col in range(3):
-            ws.write(0, col, df_out.columns[col], header_format)
-            ws.set_column(col, col, 30)
-
-        for row in range(1, len(df_out) + 1):
-            ws.set_row(row, 30)
-            for col in range(3):
-                ws.write(row, col, df_out.iloc[row-1, col], cell_format)
-
-        ws.set_row(0, 35)
-
-    st.session_state.output_excel = excel_buffer.getvalue()
-
-    # =============================
-    # PDF
-    # =============================
-    pdf_buffer = BytesIO()
-    doc = SimpleDocTemplate(pdf_buffer, pagesize=A4)
-
-    page_width, page_height = A4
-    available_height = page_height - 100
-    row_height = available_height / (len(df_out) + 1)
-
-    table_data = [df_out.columns.tolist()] + df_out.values.tolist()
-
-    table = Table(
-        table_data,
-        colWidths=[page_width / 3.2] * 3,
-        rowHeights=[row_height] * len(table_data)
-    )
-
-    table.setStyle(TableStyle([
-        ("GRID", (0,0), (-1,-1), 1, colors.black),
-        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#F2CEEF")),
-        ("ALIGN", (0,0), (-1,-1), "CENTER"),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-    ]))
-
-    doc.build([table])
-    st.session_state.output_pdf = pdf_buffer.getvalue()
-
-    # =============================
-    # TÉLÉCHARGEMENTS
-    # =============================
-    c1, c2 = st.columns(2)
-
-    with c1:
+    col_excel, col_pdf = st.columns(2)
+    with col_excel:
         st.download_button(
-            "Télécharger en Excel",
-            st.session_state.output_excel,
+            "Télécharger le tableau (Excel)",
+            data=st.session_state.output_excel.getvalue(),
             file_name="repartition.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
-    with c2:
+    with col_pdf:
         st.download_button(
-            "Télécharger en PDF",
-            st.session_state.output_pdf,
+            "Télécharger le tableau (PDF)",
+            data=st.session_state.output_pdf.getvalue(),
             file_name="repartition.pdf",
             mime="application/pdf"
         )
