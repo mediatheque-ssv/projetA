@@ -26,20 +26,26 @@ répartition mini-bénévoles
 # =====================================================
 st.markdown("""
 <style>
-.stMarkdown p {
-    font-size: 12px;
+.stButton>button {
+    background-color: #6D28D9;
+    color: white;
+    border-radius: 12px;
+    padding: 0.6em 1.2em;
+    font-size: 1.05em;
+    font-weight: 600;
+}
+.stButton>button:hover {
+    background-color: #5B21B6;
+    color: white;
+}
+hr {
+    border: none;
+    height: 2px;
+    background-color: #DDD6FE;
+    margin: 1.5em 0;
 }
 </style>
-
-<h1 style="
-    color: #6D28D9; 
-    font-size: 2.5em; 
-    font-weight: 800; 
-    text-align: center; 
-    margin-bottom: 0.5em;
-    font-variant: small-caps;
-">
-)
+""", unsafe_allow_html=True)
 
 # =====================================================
 # 1️⃣ IMPORT DU CSV
