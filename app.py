@@ -44,7 +44,7 @@ uploaded_file = st.file_uploader(
 )
 st.info(
             f"Chaque nom de bénévole doit être séparé par un point-virgule (Nom1;Nom2;Nom3). Pour un binôme, mettre un slash entre les deux noms (ex : Nom1/Nom2)."
-            f"Attention à toujours orthographier les noms de la même façon."
+            f"Attention à toujours orthographier les noms de la même façon.")
 
 if uploaded_file:
 
