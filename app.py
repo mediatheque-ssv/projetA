@@ -3,6 +3,12 @@ import pandas as pd
 import random
 
 st.markdown("""
+<style>
+.stMarkdown p {
+    font-size: 14px;
+}
+</style>
+
 <h1 style="
     color: #6D28D9; 
     font-size: 2.5em; 
