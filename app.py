@@ -194,37 +194,52 @@ if uploaded_file:
             cle = f"{date} | {horaire_export}"
             creneaux_info.append({'cle': cle, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
 
-        # Affectation
-        for creneau in creneaux_info:
-            date_horaire_dt = creneau['dt']
-            dispos = creneau['dispos']
-            nb_personnes_affectees = sum(compter_personnes(n) for n in creneau['affectes'])
-            candidats = []
-            for n in dispos:
-                if n not in creneau['affectes']:
-                    # Vérifier si l'enfant n'a pas déjà atteint le maximum d'occurrences
-                    if compteur[n] >= max_occurrences:
-                        continue
-                    
-                    distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
-                    if distance >= DELAI_MINIMUM:
-                        nb_dispos = dispos_par_entite[n]
-                        # Bonus pour ceux qui ont peu de disponibilités
-                        bonus = -100 if nb_dispos < 5 else 0
-                        # GROS bonus pour ceux en dessous du minimum d'occurrences
-                        if compteur[n] < min_occurrences:
-                            bonus -= 1000
-                        alea_compteur = random.uniform(-0.5, 0.5)
-                        alea_dispos = random.uniform(-1, 1)
-                        candidats.append((n, compteur[n] + bonus + alea_compteur, nb_dispos + alea_dispos))
-            candidats.sort(key=lambda x: (x[1], x[2]))
-            for nom, _, _ in candidats:
-                nb_personnes_ce_nom = compter_personnes(nom)
-                if nb_personnes_affectees + nb_personnes_ce_nom <= max_par_date:
-                    creneau['affectes'].append(nom)
-                    compteur[nom] += 1
-                    affectations[nom].append(date_horaire_dt)
-                    nb_personnes_affectees += nb_personnes_ce_nom
+        # Affectation en plusieurs passes pour atteindre les minimums
+        MAX_PASSES = 5
+        for passe in range(MAX_PASSES):
+            amelioration = False
+            
+            for creneau in creneaux_info:
+                date_horaire_dt = creneau['dt']
+                dispos = creneau['dispos']
+                nb_personnes_affectees = sum(compter_personnes(n) for n in creneau['affectes'])
+                
+                # Si le créneau est plein, on passe au suivant
+                if nb_personnes_affectees >= max_par_date:
+                    continue
+                
+                candidats = []
+                for n in dispos:
+                    if n not in creneau['affectes']:
+                        # Vérifier si l'enfant n'a pas déjà atteint le maximum d'occurrences
+                        if compteur[n] >= max_occurrences:
+                            continue
+                        
+                        distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
+                        if distance >= DELAI_MINIMUM:
+                            nb_dispos = dispos_par_entite[n]
+                            # Bonus pour ceux qui ont peu de disponibilités
+                            bonus = -100 if nb_dispos < 5 else 0
+                            # GROS bonus pour ceux en dessous du minimum d'occurrences
+                            if compteur[n] < min_occurrences:
+                                bonus -= 1000
+                            alea_compteur = random.uniform(-0.5, 0.5)
+                            alea_dispos = random.uniform(-1, 1)
+                            candidats.append((n, compteur[n] + bonus + alea_compteur, nb_dispos + alea_dispos))
+                
+                candidats.sort(key=lambda x: (x[1], x[2]))
+                for nom, _, _ in candidats:
+                    nb_personnes_ce_nom = compter_personnes(nom)
+                    if nb_personnes_affectees + nb_personnes_ce_nom <= max_par_date:
+                        creneau['affectes'].append(nom)
+                        compteur[nom] += 1
+                        affectations[nom].append(date_horaire_dt)
+                        nb_personnes_affectees += nb_personnes_ce_nom
+                        amelioration = True
+            
+            # Si on n'a rien pu améliorer, on arrête les passes
+            if not amelioration:
+                break
 
         # Vérifier les contraintes min d'occurrences
         enfants_sous_minimum = {nom: count for nom, count in compteur.items() if count < min_occurrences}
