@@ -9,10 +9,12 @@ st.markdown("""
     font-weight: 800; 
     text-align: center; 
     margin-bottom: 0.5em;
+    font-variant: small-caps;
 ">
-<span style="font-variant: normal;">R</span><span style="font-variant: small-caps;">épartition mini-bénévoles</span>
+Répartition mini-bénévoles
 </h1>
 """, unsafe_allow_html=True)
+
 
 
 # =====================================================
