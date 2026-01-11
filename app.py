@@ -3,30 +3,14 @@ import pandas as pd
 import random
 import io
 
+# =====================================================
+# STYLE TITRE ET GÉNÉRAL
+# =====================================================
 st.markdown("""
 <style>
 .stMarkdown p {
     font-size: 14px;
 }
-</style>
-
-<h1 style="
-    color: #6D28D9; 
-    font-size: 2.5em; 
-    font-weight: 800; 
-    text-align: center; 
-    margin-bottom: 0.5em;
-    font-variant: small-caps;
-">
-répartition mini-bénévoles
-</h1>
-""", unsafe_allow_html=True)
-
-# =====================================================
-# STYLE GÉNÉRAL (boutons et séparateurs)
-# =====================================================
-st.markdown("""
-<style>
 .stButton>button {
     background-color: #6D28D9;
     color: white;
@@ -46,6 +30,17 @@ hr {
     margin: 1.5em 0;
 }
 </style>
+
+<h1 style="
+    color: #6D28D9; 
+    font-size: 2.5em; 
+    font-weight: 800; 
+    text-align: center; 
+    margin-bottom: 0.5em;
+    font-variant: small-caps;
+">
+répartition mini-bénévoles
+</h1>
 """, unsafe_allow_html=True)
 
 # =====================================================
@@ -81,13 +76,13 @@ if uploaded_file:
             f"Colonnes détectées : {df.columns.tolist()}"
         )
         st.stop()
-        
+
     # =====================================================
     # 2️⃣ EXTRACTION DES NOMS (avec binômes groupés)
     # =====================================================
     sample_cell = str(df["Noms_dispos"].iloc[0]) if len(df) > 0 else ""
     separator = "," if "," in sample_cell else ";"
-    
+
     noms_uniques = sorted({
         n.strip()
         for cell in df["Noms_dispos"]
@@ -99,25 +94,12 @@ if uploaded_file:
     st.markdown("## 🧒 Enfants et binômes détectés")
 
     if noms_uniques:
-        df_noms = pd.DataFrame(
-            {
-                "Enfant / binôme": noms_uniques,
-                "Type": [
-                    "Binôme" if "/" in nom else "Enfant seul"
-                    for nom in noms_uniques
-                ]
-            }
-        )
-
-        st.dataframe(
-            df_noms,
-            use_container_width=True,
-            hide_index=True
-        )
-
-        st.info(
-            f"🔎 {len(noms_uniques)} entité(s) détectée(s)"
-        )
+        df_noms = pd.DataFrame({
+            "Enfant / binôme": noms_uniques,
+            "Type": ["Binôme" if "/" in nom else "Enfant seul" for nom in noms_uniques]
+        })
+        st.dataframe(df_noms, use_container_width=True, hide_index=True)
+        st.info(f"🔎 {len(noms_uniques)} entité(s) détectée(s)")
     else:
         st.warning("Aucun enfant détecté ! Vérifie le CSV")
         st.stop()
@@ -127,29 +109,17 @@ if uploaded_file:
     # =====================================================
     st.markdown("## ⚙️ Paramètres des créneaux")
     col1, col2 = st.columns(2)
-
     with col1:
-        min_par_date = st.slider(
-            "👥 Minimum de personnes par créneau",
-            min_value=1,
-            max_value=10,
-            value=4
-        )
-
+        min_par_date = st.slider("👥 Minimum de personnes par créneau", min_value=1, max_value=10, value=4)
     with col2:
-        max_par_date = st.slider(
-            "👥 Maximum de personnes par créneau",
-            min_value=min_par_date,
-            max_value=10,
-            value=max(5, min_par_date)
-        )
+        max_par_date = st.slider("👥 Maximum de personnes par créneau", min_value=min_par_date, max_value=10, value=max(5, min_par_date))
 
     # =====================================================
     # 4️⃣ CALCUL DES DISPONIBILITÉS
     # =====================================================
     def compter_personnes(nom):
         return len(nom.split("/"))
-    
+
     dispos_par_entite = {nom: 0 for nom in noms_uniques}
     for _, row in df.iterrows():
         dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
@@ -157,7 +127,7 @@ if uploaded_file:
         for n in dispos:
             if n in dispos_par_entite:
                 dispos_par_entite[n] += 1
-    
+
     st.markdown("## 📊 Disponibilités par enfant / binôme")
     df_dispos = pd.DataFrame(
         sorted(dispos_par_entite.items(), key=lambda x: x[1]),
@@ -180,7 +150,7 @@ if uploaded_file:
             'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
             'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
         }
-        
+
         def parse_dt(row):
             try:
                 date_str = str(row['Date']).strip().lower()
@@ -195,7 +165,7 @@ if uploaded_file:
                 return pd.Timestamp(year=2026, month=mois, day=jour, hour=heure, minute=minute)
             except:
                 return pd.to_datetime("1900-01-01 00:00")
-        
+
         df_sorted = df.copy()
         df_sorted['dt'] = df_sorted.apply(parse_dt, axis=1)
         df_sorted = df_sorted.sort_values("dt")
@@ -204,12 +174,7 @@ if uploaded_file:
         for _, row in df_sorted.iterrows():
             date = str(row["Date"]).strip() or "1900-01-01"
             horaire = str(row["Horaires"]).strip() or "00:00"
-            if horaire.startswith("10"):
-                horaire_export = "10h - 11h"
-            elif horaire.startswith("15"):
-                horaire_export = "15h - 16h"
-            else:
-                horaire_export = horaire
+            horaire_export = "10h - 11h" if horaire.startswith("10") else "15h - 16h" if horaire.startswith("15") else horaire
             dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
             dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
             dispos = [n for n in dispos if n in compteur]
@@ -247,14 +212,9 @@ if uploaded_file:
         st.markdown("## 🧩 Répartition finale")
         for creneau in creneaux_info:
             enfants_raw = creneau['affectes']
-            enfants_affichage = []
-            for e in enfants_raw:
-                enfants_affichage.extend(e.split("/"))
+            enfants_affichage = [n for e in enfants_raw for n in e.split("/")]
             nb_personnes = len(enfants_affichage)
-            st.write(
-                f"{creneau['cle']} : {', '.join(enfants_affichage) if enfants_affichage else 'Aucun'} "
-                f"({max_par_date - nb_personnes} place(s) restante(s))"
-            )
+            st.write(f"{creneau['cle']} : {', '.join(enfants_affichage) if enfants_affichage else 'Aucun'} ({max_par_date - nb_personnes} place(s) restante(s))")
 
         # Occurrences
         st.markdown("## 🔁 Occurrences par enfant / binôme")
@@ -268,7 +228,9 @@ if uploaded_file:
             st.markdown("## ⚠️ Enfants / binômes jamais affectés")
             st.write(", ".join(jamais_affectes))
 
-        # Préparer le DataFrame Excel pour téléchargement
+        # =====================================================
+        # 7️⃣ EXPORT EXCEL
+        # =====================================================
         export_df = pd.DataFrame([
             {
                 "DATE": creneau['cle'].split(" | ")[0],
@@ -278,45 +240,74 @@ if uploaded_file:
             for creneau in creneaux_info
         ])
 
-# =====================================================
-# 7️⃣ BOUTON DE TÉLÉCHARGEMENT EXCEL (hors st.button)
-# =====================================================
-if 'export_df' in locals():  # si on a calculé la répartition
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        export_df.to_excel(writer, index=False, sheet_name="Répartition")
-        workbook = writer.book
-        worksheet = writer.sheets["Répartition"]
+        # Excel
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            export_df.to_excel(writer, index=False, sheet_name="Répartition")
+            workbook = writer.book
+            worksheet = writer.sheets["Répartition"]
 
-        header_format = workbook.add_format({
-            'bold': True,
-            'text_wrap': True,
-            'valign': 'vcenter',
-            'align': 'center',
-            'bg_color': '#F2CEEF',
-            'border': 1
-        })
+            header_format = workbook.add_format({
+                'bold': True, 'text_wrap': True, 'valign': 'vcenter', 'align': 'center',
+                'bg_color': '#F2CEEF', 'border': 1
+            })
+            cell_format = workbook.add_format({'valign': 'vcenter', 'align': 'center', 'border': 1})
 
-        cell_format = workbook.add_format({
-            'valign': 'vcenter',
-            'align': 'center',
-            'border': 1
-        })
+            for col_num, value in enumerate(export_df.columns.values):
+                worksheet.write(0, col_num, value, header_format)
+                for row_num, val in enumerate(export_df[value], start=1):
+                    worksheet.write(row_num, col_num, val, cell_format)
+                max_len = max(export_df[value].astype(str).map(len).max(), len(value)) + 2
+                worksheet.set_column(col_num, col_num, max_len)
 
-        for col_num, value in enumerate(export_df.columns.values):
-            worksheet.write(0, col_num, value, header_format)
-            for row_num, val in enumerate(export_df[value], start=1):
-                worksheet.write(row_num, col_num, val, cell_format)
-            max_len = max(export_df[value].astype(str).map(len).max(), len(value)) + 2
-            worksheet.set_column(col_num, col_num, max_len)
+            worksheet.set_row(0, 35)
+            for row in range(1, len(export_df)+1):
+                worksheet.set_row(row, 30)
 
-        worksheet.set_row(0, 35)  # en-tête
-        for row in range(1, len(export_df)+1):
-            worksheet.set_row(row, 30)  # lignes de données
+        st.download_button(
+            "Télécharger la répartition Excel",
+            data=output.getvalue(),
+            file_name="repartition.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
-    st.download_button(
-        "Télécharger la répartition Excel",
-        data=output.getvalue(),
-        file_name="repartition.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+        # =====================================================
+        # 8️⃣ EXPORT PDF
+        # =====================================================
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+        from reportlab.lib.units import cm
+
+        pdf_buffer = io.BytesIO()
+        doc = SimpleDocTemplate(pdf_buffer, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm)
+        elements = []
+
+        data = [export_df.columns.tolist()]
+        for idx, row in export_df.iterrows():
+            data.append([str(row[col]) for col in export_df.columns])
+
+        table = Table(data, colWidths=[5*cm, 5*cm, 8*cm])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#F2CEEF')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.black),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,0), 12),
+            ('FONTSIZE', (0,1), (-1,-1), 11),
+            ('BOTTOMPADDING', (0,0), (-1,0), 12),
+            ('BOTTOMPADDING', (0,1), (-1,-1), 8),
+            ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ]))
+        elements.append(table)
+        doc.build(elements)
+        pdf_buffer.seek(0)
+
+        st.download_button(
+            "Télécharger la répartition PDF",
+            data=pdf_buffer,
+            file_name="repartition.pdf",
+            mime="application/pdf"
+        )
