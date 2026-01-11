@@ -107,16 +107,16 @@ if uploaded_file:
     st.markdown("## ⚙️ Paramètres des créneaux")
     col1, col2 = st.columns(2)
     with col1:
-        min_par_date = st.slider("👥 Minimum de personnes par créneau", 1, 10, 4)
+        min_par_date = st.slider("👥 Minimum de mini-b par créneau", 1, 10, 4)
     with col2:
-        max_par_date = st.slider("👥 Maximum de personnes par créneau", min_par_date, 10, max(5, min_par_date))
+        max_par_date = st.slider("👥 Maximum de mini-b par créneau", min_par_date, 10, max(5, min_par_date))
 
     st.markdown("### Contraintes d'occurrences par enfant / binôme")
     col3, col4 = st.columns(2)
     with col3:
-        min_occurrences = st.slider("🔢 Minimum d'occurrences par enfant/binôme", 0, 10, 0)
+        min_occurrences = st.slider("🔢 Minimum d'occurrences par mini-b", 0, min_occurrences, 0)
     with col4:
-        max_occurrences = st.slider("🔢 Maximum d'occurrences par enfant/binôme", min_occurrences, 20, 10)
+        max_occurrences = st.slider("🔢 Maximum d'occurrences par mini-b", min_occurrences, 20, 10)
 
     # ===========================
     # CALCUL DES DISPONIBILITÉS
@@ -132,7 +132,7 @@ if uploaded_file:
             if n in dispos_par_entite:
                 dispos_par_entite[n] += 1
     
-    st.markdown("## 📊 Disponibilités par enfant / binôme")
+    st.markdown("## 📊 Disponibilités par enfant/binôme")
     df_dispos = pd.DataFrame(
         sorted(dispos_par_entite.items(), key=lambda x: x[1]),
         columns=["Enfant / binôme", "Nombre de disponibilités"]
