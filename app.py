@@ -2,15 +2,14 @@ import streamlit as st
 import pandas as pd
 import random
 import io
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 from reportlab.lib import colors
+from reportlab.platypus import Table, TableStyle
 
 st.markdown("""
 <style>
-.stMarkdown p {
-    font-size: 14px;
-}
+.stMarkdown p { font-size: 14px; }
 </style>
 
 <h1 style="
@@ -25,6 +24,9 @@ répartition mini-bénévoles
 </h1>
 """, unsafe_allow_html=True)
 
+# =====================================================
+# STYLE GÉNÉRAL
+# =====================================================
 st.markdown("""
 <style>
 .stButton>button {
@@ -39,12 +41,7 @@ st.markdown("""
     background-color: #5B21B6;
     color: white;
 }
-hr {
-    border: none;
-    height: 2px;
-    background-color: #DDD6FE;
-    margin: 1.5em 0;
-}
+hr { border: none; height: 2px; background-color: #DDD6FE; margin: 1.5em 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -52,6 +49,7 @@ hr {
 # 1️⃣ IMPORT DU CSV
 # =====================================================
 st.markdown("## 📂 Import du CSV")
+
 uploaded_file = st.file_uploader(
     "Importer le CSV",
     type=["csv"],
@@ -80,7 +78,7 @@ if uploaded_file:
         st.stop()
 
     # =====================================================
-    # 2️⃣ EXTRACTION DES NOMS (avec binômes groupés)
+    # 2️⃣ EXTRACTION DES NOMS
     # =====================================================
     sample_cell = str(df["Noms_dispos"].iloc[0]) if len(df) > 0 else ""
     separator = "," if "," in sample_cell else ";"
@@ -94,6 +92,7 @@ if uploaded_file:
     })
 
     st.markdown("## 🧒 Enfants et binômes détectés")
+
     if noms_uniques:
         df_noms = pd.DataFrame({
             "Enfant / binôme": noms_uniques,
@@ -110,27 +109,18 @@ if uploaded_file:
     # =====================================================
     st.markdown("## ⚙️ Paramètres des créneaux")
     col1, col2 = st.columns(2)
+
     with col1:
-        min_par_date = st.slider(
-            "👥 Minimum de personnes par créneau",
-            min_value=1,
-            max_value=10,
-            value=4
-        )
+        min_par_date = st.slider("👥 Minimum de personnes par créneau", 1, 10, 4)
     with col2:
-        max_par_date = st.slider(
-            "👥 Maximum de personnes par créneau",
-            min_value=min_par_date,
-            max_value=10,
-            value=max(5, min_par_date)
-        )
+        max_par_date = st.slider("👥 Maximum de personnes par créneau", min_par_date, 10, max(5, min_par_date))
 
     # =====================================================
     # 4️⃣ CALCUL DES DISPONIBILITÉS
     # =====================================================
     def compter_personnes(nom):
         return len(nom.split("/"))
-    
+
     dispos_par_entite = {nom: 0 for nom in noms_uniques}
     for _, row in df.iterrows():
         dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
@@ -221,36 +211,46 @@ if uploaded_file:
                     affectations[nom].append(date_horaire_dt)
                     nb_personnes_affectees += nb_personnes_ce_nom
 
-        st.session_state['creneaux_info'] = creneaux_info  # sauvegarde pour téléchargement
+        # Stocker dans session_state pour garder affichage
+        st.session_state['creneaux_info'] = creneaux_info
+        st.session_state['max_par_date'] = max_par_date
 
-        # =====================================================
-        # 6️⃣ AFFICHAGE FINAL
-        # =====================================================
-        st.markdown("## 🧩 Répartition finale")
-        for c in creneaux_info:
-            enfants_raw = c['affectes']
-            enfants_affichage = []
-            for e in enfants_raw:
-                enfants_affichage.extend(e.split("/"))
-            nb_personnes = len(enfants_affichage)
-            st.write(f"{c['cle']} : {', '.join(enfants_affichage) if enfants_affichage else 'Aucun'} "
-                     f"({max_par_date - nb_personnes} place(s) restante(s))")
+# =====================================================
+# 6️⃣ AFFICHAGE FINAL (toujours avec session_state)
+# =====================================================
+if 'creneaux_info' in st.session_state:
+    creneaux_info = st.session_state['creneaux_info']
+    max_par_date = st.session_state['max_par_date']
 
-        # Occurrences
-        st.markdown("## 🔁 Occurrences par enfant / binôme")
-        compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
-        df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
-        st.dataframe(df_occ, use_container_width=True, hide_index=True)
+    st.markdown("## 🧩 Répartition finale")
+    for c in creneaux_info:
+        enfants_raw = c['affectes']
+        enfants_affichage = []
+        for e in enfants_raw:
+            enfants_affichage.extend(e.split("/"))
+        nb_personnes = len(enfants_affichage)
+        st.write(f"{c['cle']} : {', '.join(enfants_affichage) if enfants_affichage else 'Aucun'} "
+                 f"({max_par_date - nb_personnes} place(s) restante(s))")
 
-        # Jamais affectés
-        jamais_affectes = [nom for nom, c in compteur.items() if c == 0]
-        if jamais_affectes:
-            st.markdown("## ⚠️ Enfants / binômes jamais affectés")
-            st.write(", ".join(jamais_affectes))
+    # Occurrences
+    st.markdown("## 🔁 Occurrences par enfant / binôme")
+    compteur_sorted = dict(sorted({n: sum([1 for c in creneaux_info if n in c['affectes']]) for n in noms_uniques}.items(), key=lambda x:x[1]))
+    df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
+    st.dataframe(df_occ, use_container_width=True, hide_index=True)
 
-        # =====================================================
-        # 7️⃣ BOUTONS DE TÉLÉCHARGEMENT (Excel + PDF côte à côte)
-        # =====================================================
+    # Jamais affectés
+    jamais_affectes = [nom for nom, c in compteur_sorted.items() if c == 0]
+    if jamais_affectes:
+        st.markdown("## ⚠️ Enfants / binômes jamais affectés")
+        st.write(", ".join(jamais_affectes))
+
+    # =====================================================
+    # 7️⃣ BOUTONS TÉLÉCHARGEMENT EXCEL ET PDF
+    # =====================================================
+    col_excel, col_pdf = st.columns(2)
+
+    # Export Excel
+    with col_excel:
         export_df = pd.DataFrame([
             {
                 "DATE": c['cle'].split(" | ")[0],
@@ -259,63 +259,61 @@ if uploaded_file:
             }
             for c in creneaux_info
         ])
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            export_df.to_excel(writer, index=False, sheet_name="Répartition")
+            workbook = writer.book
+            worksheet = writer.sheets["Répartition"]
 
-        col_excel, col_pdf = st.columns(2)
+            header_format = workbook.add_format({
+                'bold': True, 'text_wrap': True, 'valign': 'vcenter',
+                'align': 'center', 'bg_color': '#F2CEEF', 'border': 1
+            })
+            cell_format = workbook.add_format({
+                'valign': 'vcenter', 'align': 'center', 'border': 1
+            })
+            for col_num, value in enumerate(export_df.columns.values):
+                worksheet.write(0, col_num, value, header_format)
+                for row_num, val in enumerate(export_df[value], start=1):
+                    worksheet.write(row_num, col_num, val, cell_format)
+                max_len = max(export_df[value].astype(str).map(len).max(), len(value)) + 2
+                worksheet.set_column(col_num, col_num, max_len)
+            worksheet.set_row(0, 35)
+            for row in range(1, len(export_df)+1):
+                worksheet.set_row(row, 32)
 
-        # --- Excel ---
-        with col_excel:
-            output_excel = io.BytesIO()
-            with pd.ExcelWriter(output_excel, engine='xlsxwriter') as writer:
-                export_df.to_excel(writer, index=False, sheet_name="Répartition")
-                workbook = writer.book
-                worksheet = writer.sheets["Répartition"]
-                header_format = workbook.add_format({
-                    'bold': True, 'text_wrap': True, 'valign': 'vcenter', 'align': 'center',
-                    'bg_color': '#F2CEEF', 'border': 1
-                })
-                cell_format = workbook.add_format({'valign': 'vcenter', 'align': 'center', 'border': 1})
-                for col_num, value in enumerate(export_df.columns.values):
-                    worksheet.write(0, col_num, value, header_format)
-                    for row_num, val in enumerate(export_df[value], start=1):
-                        worksheet.write(row_num, col_num, val, cell_format)
-                    max_len = max(export_df[value].astype(str).map(len).max(), len(value)) + 2
-                    worksheet.set_column(col_num, col_num, max_len)
-                worksheet.set_row(0, 35)
-                for row in range(1, len(export_df)+1):
-                    worksheet.set_row(row, 32)
-            st.download_button(
-                "Télécharger la répartition Excel",
-                data=output_excel.getvalue(),
-                file_name="repartition.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        st.download_button(
+            "Télécharger la répartition Excel",
+            data=output.getvalue(),
+            file_name="repartition.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
-        # --- PDF ---
-        with col_pdf:
-            output_pdf = io.BytesIO()
-            doc = SimpleDocTemplate(output_pdf, pagesize=A4)
-            elements = []
-            data = [export_df.columns.tolist()] + export_df.values.tolist()
-            table = Table(data, colWidths=[150, 100, 250])
-            style = TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#F2CEEF')),
-                ('TEXTCOLOR', (0,0), (-1,0), colors.black),
-                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ('GRID', (0,0), (-1,-1), 1, colors.black),
-                ('FONTSIZE', (0,0), (-1,-1), 10),
-                ('TOPPADDING', (0,0), (-1,0), 8),
-                ('BOTTOMPADDING', (0,0), (-1,0), 8),
-                ('TOPPADDING', (0,1), (-1,-1), 12),
-                ('BOTTOMPADDING', (0,1), (-1,-1), 12),
-                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ])
-            table.setStyle(style)
-            elements.append(table)
-            doc.build(elements)
-            st.download_button(
-                "Télécharger la répartition PDF",
-                data=output_pdf.getvalue(),
-                file_name="repartition.pdf",
-                mime="application/pdf"
-            )
+    # Export PDF
+    with col_pdf:
+        output_pdf = io.BytesIO()
+        c = canvas.Canvas(output_pdf, pagesize=A4)
+        width, height = A4
+        y = height - 50
+        data = [["DATE", "HORAIRES", "NOMS DES MINI-BÉNÉVOLES"]]
+        for r in export_df.itertuples(index=False):
+            data.append([r.DATE, r.HORAIRES, r._3])
+        table = Table(data, colWidths=[100, 100, 250], rowHeights=[35] + [32]*(len(data)-1))
+        table.setStyle(TableStyle([
+            ('GRID', (0,0), (-1,-1), 1, colors.black),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('BACKGROUND', (0,0), (-1,0), colors.lightpink)
+        ]))
+        table.wrapOn(c, width, height)
+        table.drawOn(c, 50, y - 32*len(data))
+        c.showPage()
+        c.save()
+        output_pdf.seek(0)
+        st.download_button(
+            "Télécharger la répartition PDF",
+            data=output_pdf.getvalue(),
+            file_name="repartition.pdf",
+            mime="application/pdf"
+        )
