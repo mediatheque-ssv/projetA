@@ -262,14 +262,22 @@ if uploaded_file:
                 # Calculer le score de pénalité
                 score = 0
                 
-                # Pénalité uniquement pour les enfants hors contraintes min/max occurrences
+                # Pénalité pour les enfants hors contraintes min/max occurrences
                 for nom, count in compteur.items():
                     if count < min_occurrences:
                         score += (min_occurrences - count) * 10  # Pénalité forte
                     if count > max_occurrences:
                         score += (count - max_occurrences) * 10  # Pénalité forte
                 
-                # Pas de pénalité pour le remplissage des créneaux (plus de flexibilité et de variété)
+                # Pénalité pour les créneaux sous le minimum (mais pas pour ceux qui n'atteignent pas le max)
+                for creneau in creneaux_info:
+                    enfants_affichage = []
+                    for e in creneau['affectes']:
+                        enfants_affichage.extend(e.split("/"))
+                    nb_personnes = len(enfants_affichage)
+                    
+                    if nb_personnes < min_par_date:
+                        score += (min_par_date - nb_personnes) * 5  # Pénalité moyenne
                 
                 # Garder la meilleure tentative
                 if score < meilleur_score:
