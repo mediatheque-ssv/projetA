@@ -272,21 +272,25 @@ if uploaded_file:
         # =====================================================
         # 7️⃣ EXPORT EXCEL PRÉSENTABLE
         # =====================================================
+
+        # Préparer le DataFrame pour l'export Excel
         export_df = pd.DataFrame([
             {
                 "DATE": creneau['cle'].split(" | ")[0],
                 "HORAIRES": creneau['cle'].split(" | ")[1],
-                "NOMS DES MINI-BÉNÉVOLES": separator.join([e.replace("/", " et ") for e in creneau['affectes']])
+                "NOMS DES MINI-BÉNÉVOLES": ", ".join([e.replace("/", " et ") for e in creneau['affectes']])
             }
             for creneau in creneaux_info
         ])
 
+        # Créer un fichier Excel en mémoire
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             export_df.to_excel(writer, index=False, sheet_name="Répartition")
             workbook = writer.book
             worksheet = writer.sheets["Répartition"]
 
+            # Format pour les en-têtes
             header_format = workbook.add_format({
                 'bold': True,
                 'text_wrap': True,
@@ -296,11 +300,23 @@ if uploaded_file:
                 'border': 1
             })
 
+            # Format pour les cellules normales avec bordure et centrage
+            cell_format = workbook.add_format({
+                'valign': 'center',
+                'align': 'center',
+                'border': 1
+            })
+
+            # Appliquer le format aux en-têtes et aux cellules
             for col_num, value in enumerate(export_df.columns.values):
                 worksheet.write(0, col_num, value, header_format)
+                for row_num, val in enumerate(export_df[value], start=1):
+                    worksheet.write(row_num, col_num, val, cell_format)
+                # Ajuster la largeur de la colonne
                 max_len = max(export_df[value].astype(str).map(len).max(), len(value)) + 2
                 worksheet.set_column(col_num, col_num, max_len)
 
+        # Bouton de téléchargement Excel
         st.download_button(
             "Télécharger la répartition Excel",
             data=output.getvalue(),
