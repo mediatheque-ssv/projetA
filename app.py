@@ -249,8 +249,8 @@ if uploaded_file:
             
             return creneaux_info, compteur
 
-        # Lancer jusqu'à 50 tentatives pour trouver une répartition parfaite
-        MAX_TENTATIVES = 50
+        # Lancer jusqu'à 100 tentatives pour trouver une répartition parfaite
+        MAX_TENTATIVES = 100
         meilleure_repartition = None
         meilleur_compteur = None
         meilleur_score = float('inf')  # Score de pénalité global
