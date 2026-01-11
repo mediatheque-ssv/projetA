@@ -249,8 +249,8 @@ if uploaded_file:
             
             return creneaux_info, compteur
 
-        # Lancer jusqu'à 100 tentatives pour trouver une répartition parfaite
-        MAX_TENTATIVES = 100
+        # Lancer jusqu'à 50 tentatives pour trouver une répartition parfaite
+        MAX_TENTATIVES = 50
         meilleure_repartition = None
         meilleur_compteur = None
         meilleur_score = float('inf')  # Score de pénalité global
@@ -262,22 +262,14 @@ if uploaded_file:
                 # Calculer le score de pénalité
                 score = 0
                 
-                # Pénalité pour les enfants hors contraintes min/max occurrences
+                # Pénalité uniquement pour les enfants hors contraintes min/max occurrences
                 for nom, count in compteur.items():
                     if count < min_occurrences:
                         score += (min_occurrences - count) * 10  # Pénalité forte
                     if count > max_occurrences:
                         score += (count - max_occurrences) * 10  # Pénalité forte
                 
-                # Pénalité pour les créneaux qui n'atteignent pas le maximum
-                for creneau in creneaux_info:
-                    enfants_affichage = []
-                    for e in creneau['affectes']:
-                        enfants_affichage.extend(e.split("/"))
-                    nb_personnes = len(enfants_affichage)
-                    
-                    if nb_personnes < max_par_date:
-                        score += (max_par_date - nb_personnes) * 5  # Pénalité moyenne
+                # Pas de pénalité pour le remplissage des créneaux (plus de flexibilité et de variété)
                 
                 # Garder la meilleure tentative
                 if score < meilleur_score:
