@@ -50,7 +50,8 @@ uploaded_file = st.file_uploader(
     help=(
         "• Le CSV doit contenir exactement les colonnes : 'Date', 'Horaires' et 'Noms_dispos'.  \n"
         "• Chaque nom de bénévole doit être séparé par un point-virgule (Nom1;Nom2;Nom3).  \n"
-        "• Pour un binôme, mettre un slash entre les deux noms (Nom1/Nom2).  \n"
+        "• Pour indiquer un binôme, mettre un slash entre les deux noms (Nom1/Nom2).  \n"
+        "• Ne pas noter une personne comme disponible sur un créneau si son binôme n'est pas disponible sur ce même créneau.  \n"
         "• Attention à toujours orthographier les noms de la même manière."
     )
 )
@@ -121,20 +122,18 @@ if uploaded_file:
     st.markdown("## ⚙️ Paramètres des créneaux")
     col1, col2 = st.columns(2)
     with col1:
-        min_par_date = st.slider("👥 Minimum de personnes par créneau", 1, 10, 4)
+        min_par_date = st.slider("👥 Minimum de mini-b par créneau", 1, 10, 4)
     with col2:
-        max_par_date = st.slider("👥 Maximum de personnes par créneau", min_par_date, 10, max(5, min_par_date))
-
-    st.markdown("### Contraintes d'occurrences par enfant / binôme")
+        max_par_date = st.slider("👥 Maximum de mini-b par créneau", min_par_date, 10, max(5, min_par_date))
     
     # Calculer le minimum de disponibilités parmi tous les bénévoles
     min_dispos_total = min(dispos_par_entite.values()) if dispos_par_entite else 0
     
     col3, col4 = st.columns(2)
     with col3:
-        min_occurrences = st.slider("🔢 Minimum d'occurrences par enfant/binôme", 0, 10, min_dispos_total)
+        min_occurrences = st.slider("🔢 Minimum d'occurrences par mini-b", 0, 10, min_dispos_total)
     with col4:
-        max_occurrences = st.slider("🔢 Maximum d'occurrences par enfant/binôme", min_occurrences, 20, 10)
+        max_occurrences = st.slider("🔢 Maximum d'occurrences par mini-b", min_occurrences, 20, 6)
     
     st.markdown("## 📊 Disponibilités par enfant / binôme")
     df_dispos = pd.DataFrame(
