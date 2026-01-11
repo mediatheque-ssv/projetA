@@ -291,14 +291,14 @@ if uploaded_file:
           workbook = writer.book
           worksheet = writer.sheets["Répartition"]
 
-         # Format pour les en-têtes
+          # Format pour les en-têtes
           header_format = workbook.add_format({
               'bold': True,
               'text_wrap': True,
               'valign': 'center',
               'align': 'center',
               'bg_color': '#F2CEEF',
-               'border': 1
+              'border': 1
           })
 
           # Appliquer le format aux en-têtes et ajuster largeur des colonnes
@@ -314,4 +314,3 @@ if uploaded_file:
           file_name="repartition.xlsx",
           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       )
-
