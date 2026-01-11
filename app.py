@@ -27,7 +27,7 @@ répartition mini-bénévoles
 st.markdown("""
 <style>
 .stMarkdown p {
-    font-size: 14px;
+    font-size: 12px;
 }
 </style>
 
@@ -39,9 +39,7 @@ st.markdown("""
     margin-bottom: 0.5em;
     font-variant: small-caps;
 ">
-répartition mini-bénévoles
-</h1>
-""", unsafe_allow_html=True)
+)
 
 # =====================================================
 # 1️⃣ IMPORT DU CSV
