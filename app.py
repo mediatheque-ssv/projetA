@@ -3,10 +3,17 @@ import pandas as pd
 import random
 
 st.markdown("""
-<h1 style="color:#6D28D9; font-size:2.5em; font-weight:800; text-align:center; margin-bottom:0.5em;">
-Répartition mini-bénévoles
+<h1 style="
+    color: #6D28D9; 
+    font-size: 2.5em; 
+    font-weight: 800; 
+    text-align: center; 
+    margin-bottom: 0.5em;
+">
+<span style="font-variant: normal;">R</span><span style="font-variant: small-caps;">épartition mini-bénévoles</span>
 </h1>
 """, unsafe_allow_html=True)
+
 
 # =====================================================
 # STYLE GÉNÉRAL (boutons et séparateurs)
