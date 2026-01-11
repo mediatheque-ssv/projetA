@@ -82,9 +82,6 @@ if uploaded_file:
         )
         st.stop()
         
-    st.markdown("### Aperçu du CSV")
-    st.dataframe(df)
-
     # =====================================================
     # 2️⃣ EXTRACTION DES NOMS (avec binômes groupés)
     # =====================================================
@@ -171,7 +168,6 @@ if uploaded_file:
     # =====================================================
     # 5️⃣ RÉPARTITION AUTOMATIQUE
     # =====================================================
-    st.markdown("---")
     st.markdown("## ▶️ 5. Lancer la répartition")
     if st.button("Répartir les enfants"):
 
@@ -282,7 +278,7 @@ if uploaded_file:
             {
                 "DATE": creneau['cle'].split(" | ")[0],
                 "HORAIRES": creneau['cle'].split(" | ")[1],
-                "NOMS DES MINI-BÉNÉVOLES": ", ".join(creneau['affectes'])  # juste virgules
+                "NOMS DES MINI-BÉNÉVOLES": ", ".join([n for e in creneau['affectes'] for n in e.split("/")])
             }
             for creneau in creneaux_info
         ])
