@@ -154,100 +154,149 @@ if uploaded_file:
     st.markdown("## ▶️ Lancer la répartition")
     if st.button("Répartir les enfants"):
 
-        compteur = {nom: 0 for nom in noms_uniques}
-        affectations = {nom: [] for nom in noms_uniques}
-        DELAI_MINIMUM = 6
+        # Fonction pour effectuer une répartition complète
+        def faire_repartition():
+            compteur = {nom: 0 for nom in noms_uniques}
+            affectations = {nom: [] for nom in noms_uniques}
+            DELAI_MINIMUM = 6
 
-        mois_fr = {
-            'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
-            'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
-            'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
-        }
+            mois_fr = {
+                'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
+                'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
+                'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
+            }
 
-        def parse_dt(row):
-            try:
-                date_str = str(row['Date']).strip().lower()
-                horaire_str = str(row['Horaires']).strip()
-                parts = date_str.split()
-                jour = int(parts[1]) if len(parts) > 1 else 1
-                mois_nom = parts[2] if len(parts) > 2 else 'janvier'
-                mois = mois_fr.get(mois_nom, 1)
-                horaire_str = horaire_str.replace('h', ':00') if 'h' in horaire_str else horaire_str
-                heure = int(horaire_str.split(':')[0]) if ':' in horaire_str else 0
-                minute = int(horaire_str.split(':')[1]) if ':' in horaire_str and len(horaire_str.split(':')) > 1 else 0
-                return pd.Timestamp(year=2026, month=mois, day=jour, hour=heure, minute=minute)
-            except:
-                return pd.to_datetime("1900-01-01 00:00")
+            def parse_dt(row):
+                try:
+                    date_str = str(row['Date']).strip().lower()
+                    horaire_str = str(row['Horaires']).strip()
+                    parts = date_str.split()
+                    jour = int(parts[1]) if len(parts) > 1 else 1
+                    mois_nom = parts[2] if len(parts) > 2 else 'janvier'
+                    mois = mois_fr.get(mois_nom, 1)
+                    horaire_str = horaire_str.replace('h', ':00') if 'h' in horaire_str else horaire_str
+                    heure = int(horaire_str.split(':')[0]) if ':' in horaire_str else 0
+                    minute = int(horaire_str.split(':')[1]) if ':' in horaire_str and len(horaire_str.split(':')) > 1 else 0
+                    return pd.Timestamp(year=2026, month=mois, day=jour, hour=heure, minute=minute)
+                except:
+                    return pd.to_datetime("1900-01-01 00:00")
 
-        df_sorted = df.copy()
-        df_sorted['dt'] = df_sorted.apply(parse_dt, axis=1)
-        df_sorted = df_sorted.sort_values("dt")
+            df_sorted = df.copy()
+            df_sorted['dt'] = df_sorted.apply(parse_dt, axis=1)
+            df_sorted = df_sorted.sort_values("dt")
 
-        creneaux_info = []
-        for _, row in df_sorted.iterrows():
-            date = str(row["Date"]).strip() or "1900-01-01"
-            horaire = str(row["Horaires"]).strip() or "00:00"
-            horaire_export = "10h - 11h" if horaire.startswith("10") else "15h - 16h" if horaire.startswith("15") else horaire
-            dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
-            dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
-            dispos = [n for n in dispos if n in compteur]
-            cle = f"{date} | {horaire_export}"
-            creneaux_info.append({'cle': cle, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
+            creneaux_info = []
+            for _, row in df_sorted.iterrows():
+                date = str(row["Date"]).strip() or "1900-01-01"
+                horaire = str(row["Horaires"]).strip() or "00:00"
+                horaire_export = "10h - 11h" if horaire.startswith("10") else "15h - 16h" if horaire.startswith("15") else horaire
+                dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
+                dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
+                dispos = [n for n in dispos if n in compteur]
+                cle = f"{date} | {horaire_export}"
+                creneaux_info.append({'cle': cle, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
 
-        # Affectation en plusieurs passes pour atteindre les minimums
-        MAX_PASSES = 5
-        for passe in range(MAX_PASSES):
-            amelioration = False
+            # Affectation en plusieurs passes pour atteindre les minimums
+            MAX_PASSES = 5
+            for passe in range(MAX_PASSES):
+                amelioration = False
+                
+                for creneau in creneaux_info:
+                    date_horaire_dt = creneau['dt']
+                    dispos = creneau['dispos']
+                    nb_personnes_affectees = sum(compter_personnes(n) for n in creneau['affectes'])
+                    
+                    # Si le créneau est plein, on passe au suivant
+                    if nb_personnes_affectees >= max_par_date:
+                        continue
+                    
+                    candidats = []
+                    for n in dispos:
+                        if n not in creneau['affectes']:
+                            # Vérifier si l'enfant n'a pas déjà atteint le maximum d'occurrences
+                            if compteur[n] >= max_occurrences:
+                                continue
+                            
+                            distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
+                            if distance >= DELAI_MINIMUM:
+                                nb_dispos = dispos_par_entite[n]
+                                # Bonus pour ceux qui ont peu de disponibilités
+                                bonus = -100 if nb_dispos < 5 else 0
+                                # GROS bonus pour ceux en dessous du minimum d'occurrences
+                                if compteur[n] < min_occurrences:
+                                    bonus -= 1000
+                                alea_compteur = random.uniform(-0.5, 0.5)
+                                alea_dispos = random.uniform(-1, 1)
+                                candidats.append((n, compteur[n] + bonus + alea_compteur, nb_dispos + alea_dispos))
+                    
+                    candidats.sort(key=lambda x: (x[1], x[2]))
+                    for nom, _, _ in candidats:
+                        nb_personnes_ce_nom = compter_personnes(nom)
+                        if nb_personnes_affectees + nb_personnes_ce_nom <= max_par_date:
+                            creneau['affectes'].append(nom)
+                            compteur[nom] += 1
+                            affectations[nom].append(date_horaire_dt)
+                            nb_personnes_affectees += nb_personnes_ce_nom
+                            amelioration = True
+                
+                # Si on n'a rien pu améliorer, on arrête les passes
+                if not amelioration:
+                    break
             
-            for creneau in creneaux_info:
-                date_horaire_dt = creneau['dt']
-                dispos = creneau['dispos']
-                nb_personnes_affectees = sum(compter_personnes(n) for n in creneau['affectes'])
-                
-                # Si le créneau est plein, on passe au suivant
-                if nb_personnes_affectees >= max_par_date:
-                    continue
-                
-                candidats = []
-                for n in dispos:
-                    if n not in creneau['affectes']:
-                        # Vérifier si l'enfant n'a pas déjà atteint le maximum d'occurrences
-                        if compteur[n] >= max_occurrences:
-                            continue
-                        
-                        distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
-                        if distance >= DELAI_MINIMUM:
-                            nb_dispos = dispos_par_entite[n]
-                            # Bonus pour ceux qui ont peu de disponibilités
-                            bonus = -100 if nb_dispos < 5 else 0
-                            # GROS bonus pour ceux en dessous du minimum d'occurrences
-                            if compteur[n] < min_occurrences:
-                                bonus -= 1000
-                            alea_compteur = random.uniform(-0.5, 0.5)
-                            alea_dispos = random.uniform(-1, 1)
-                            candidats.append((n, compteur[n] + bonus + alea_compteur, nb_dispos + alea_dispos))
-                
-                candidats.sort(key=lambda x: (x[1], x[2]))
-                for nom, _, _ in candidats:
-                    nb_personnes_ce_nom = compter_personnes(nom)
-                    if nb_personnes_affectees + nb_personnes_ce_nom <= max_par_date:
-                        creneau['affectes'].append(nom)
-                        compteur[nom] += 1
-                        affectations[nom].append(date_horaire_dt)
-                        nb_personnes_affectees += nb_personnes_ce_nom
-                        amelioration = True
-            
-            # Si on n'a rien pu améliorer, on arrête les passes
-            if not amelioration:
-                break
+            return creneaux_info, compteur
 
-        # Vérifier les contraintes min d'occurrences
+        # Lancer jusqu'à 50 tentatives pour trouver une répartition parfaite
+        MAX_TENTATIVES = 50
+        meilleure_repartition = None
+        meilleur_compteur = None
+        meilleur_score = float('inf')  # Nombre d'enfants hors contraintes
+        
+        with st.spinner(f'🔄 Recherche de la meilleure répartition (max {MAX_TENTATIVES} tentatives)...'):
+            for tentative in range(MAX_TENTATIVES):
+                creneaux_info, compteur = faire_repartition()
+                
+                # Vérifier si toutes les contraintes sont respectées
+                enfants_hors_contraintes = 0
+                for nom, count in compteur.items():
+                    if count < min_occurrences or count > max_occurrences:
+                        enfants_hors_contraintes += 1
+                
+                # Garder la meilleure tentative
+                if enfants_hors_contraintes < meilleur_score:
+                    meilleur_score = enfants_hors_contraintes
+                    meilleure_repartition = creneaux_info
+                    meilleur_compteur = compteur
+                
+                # Si on a trouvé une répartition parfaite, on s'arrête
+                if enfants_hors_contraintes == 0:
+                    st.success(f'✅ Répartition parfaite trouvée en {tentative + 1} tentative(s) !')
+                    break
+            else:
+                # Si on arrive ici, aucune répartition parfaite n'a été trouvée
+                if meilleur_score > 0:
+                    st.warning(f'⚠️ Après {MAX_TENTATIVES} tentatives, {meilleur_score} enfant(s)/binôme(s) ne respectent pas les contraintes min/max.')
+
+        creneaux_info = meilleure_repartition
+        compteur = meilleur_compteur
+
+        creneaux_info = meilleure_repartition
+        compteur = meilleur_compteur
+
+        # Vérifier les contraintes et afficher les détails si nécessaire
         enfants_sous_minimum = {nom: count for nom, count in compteur.items() if count < min_occurrences}
+        enfants_sur_maximum = {nom: count for nom, count in compteur.items() if count > max_occurrences}
+        
         if enfants_sous_minimum:
-            st.warning(f"⚠️ Certains enfants/binômes n'ont pas atteint le minimum de {min_occurrences} occurrence(s) :")
+            st.warning(f"⚠️ {len(enfants_sous_minimum)} enfant(s)/binôme(s) n'ont pas atteint le minimum de {min_occurrences} occurrence(s) :")
             for nom, count in enfants_sous_minimum.items():
-                st.write(f"• {nom} : {count} occurrence(s) au lieu de {min_occurrences} minimum")
+                st.write(f"• {nom} : {count} occurrence(s)")
             st.info("💡 Essayez d'augmenter le nombre maximum de personnes par créneau ou de réduire le minimum d'occurrences.")
+        
+        if enfants_sur_maximum:
+            st.warning(f"⚠️ {len(enfants_sur_maximum)} enfant(s)/binôme(s) ont dépassé le maximum de {max_occurrences} occurrence(s) :")
+            for nom, count in enfants_sur_maximum.items():
+                st.write(f"• {nom} : {count} occurrence(s)")
+            st.info("💡 Essayez d'augmenter le maximum d'occurrences ou de réduire le nombre maximum de personnes par créneau.")
 
         # Stocker dans session_state
         st.session_state.repartition = creneaux_info
