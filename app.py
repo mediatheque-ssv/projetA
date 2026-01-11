@@ -102,6 +102,20 @@ if uploaded_file:
         st.stop()
 
     # ===========================
+    # CALCUL DES DISPONIBILITÉS
+    # ===========================
+    def compter_personnes(nom):
+        return len(nom.split("/"))
+    
+    dispos_par_entite = {nom: 0 for nom in noms_uniques}
+    for _, row in df.iterrows():
+        dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
+        dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
+        for n in dispos:
+            if n in dispos_par_entite:
+                dispos_par_entite[n] += 1
+    
+    # ===========================
     # PARAMÈTRES CRÉNEAUX
     # ===========================
     st.markdown("## ⚙️ Paramètres des créneaux")
@@ -121,20 +135,6 @@ if uploaded_file:
         min_occurrences = st.slider("🔢 Minimum d'occurrences par enfant/binôme", 0, 10, min_dispos_total)
     with col4:
         max_occurrences = st.slider("🔢 Maximum d'occurrences par enfant/binôme", min_occurrences, 20, 10)
-
-    # ===========================
-    # CALCUL DES DISPONIBILITÉS
-    # ===========================
-    def compter_personnes(nom):
-        return len(nom.split("/"))
-    
-    dispos_par_entite = {nom: 0 for nom in noms_uniques}
-    for _, row in df.iterrows():
-        dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
-        dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
-        for n in dispos:
-            if n in dispos_par_entite:
-                dispos_par_entite[n] += 1
     
     st.markdown("## 📊 Disponibilités par enfant / binôme")
     df_dispos = pd.DataFrame(
