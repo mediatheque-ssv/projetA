@@ -208,10 +208,17 @@ if uploaded_file:
         for _, row in df_sorted.iterrows():
             date = str(row["Date"]).strip() or "1900-01-01"
             horaire = str(row["Horaires"]).strip() or "00:00"
+            # transformer 10h -> 10h - 11h, 15h -> 15h - 16h
+            if horaire.startswith("10"):
+                horaire_export = "10h - 11h"
+            elif horaire.startswith("15"):
+                horaire_export = "15h - 16h"
+            else:
+                horaire_export = horaire
             dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
             dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
             dispos = [n for n in dispos if n in compteur]
-            cle = f"{date} | {horaire}"
+            cle = f"{date} | {horaire_export}"
             creneaux_info.append({'cle': cle, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
 
         # Affectation
@@ -272,20 +279,11 @@ if uploaded_file:
         # =====================================================
         # 7️⃣ EXPORT EXCEL PRÉSENTABLE
         # =====================================================
-
         # Préparer le DataFrame pour l'export Excel
-        def format_horaire(h):
-            if h.startswith("10"):
-                return "10h - 11h"
-            elif h.startswith("15"):
-                return "15h - 16h"
-            else:
-                return h
-
         export_df = pd.DataFrame([
             {
                 "DATE": creneau['cle'].split(" | ")[0],
-                "HORAIRES": format_horaire(creneau['cle'].split(" | ")[1]),
+                "HORAIRES": creneau['cle'].split(" | ")[1],
                 "NOMS DES MINI-BÉNÉVOLES": ", ".join([e.replace("/", " et ") for e in creneau['affectes']])
             }
             for creneau in creneaux_info
@@ -302,15 +300,15 @@ if uploaded_file:
             header_format = workbook.add_format({
                 'bold': True,
                 'text_wrap': True,
-                'valign': 'center',
+                'valign': 'vcenter',
                 'align': 'center',
                 'bg_color': '#F2CEEF',
                 'border': 1
             })
 
-            # Format pour les cellules normales avec bordure et centrage
+            # Format pour les cellules normales
             cell_format = workbook.add_format({
-                'valign': 'center',
+                'valign': 'vcenter',
                 'align': 'center',
                 'border': 1
             })
@@ -320,13 +318,13 @@ if uploaded_file:
                 worksheet.write(0, col_num, value, header_format)
                 for row_num, val in enumerate(export_df[value], start=1):
                     worksheet.write(row_num, col_num, val, cell_format)
-                # Ajuster la largeur de la colonne
                 max_len = max(export_df[value].astype(str).map(len).max(), len(value)) + 2
                 worksheet.set_column(col_num, col_num, max_len)
 
-            # Augmenter la hauteur des lignes
+            # Ajuster hauteur des lignes
+            worksheet.set_row(0, 35)  # en-tête
             for row in range(1, len(export_df)+1):
-                worksheet.set_row(row, 30)  # hauteur = 30
+                worksheet.set_row(row, 30)  # lignes de données
 
         # Bouton de téléchargement Excel
         st.download_button(
