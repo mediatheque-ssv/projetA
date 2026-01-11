@@ -7,6 +7,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle
 
+# ================== STYLE ==================
 st.markdown("""
 <style>
 .stMarkdown p { font-size: 14px; }
@@ -37,7 +38,7 @@ répartition mini-bénévoles
 </h1>
 """, unsafe_allow_html=True)
 
-# 1️⃣ IMPORT DU CSV
+# ================== 1️⃣ IMPORT CSV ==================
 st.markdown("## 📂 Import du CSV")
 uploaded_file = st.file_uploader(
     "Importer le CSV",
@@ -52,7 +53,6 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file:
 
-    # Lecture CSV
     try:
         df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
     except Exception as e:
@@ -68,7 +68,7 @@ if uploaded_file:
         )
         st.stop()
 
-    # EXTRACTION DES NOMS
+    # ================== EXTRACTION NOMS ==================
     sample_cell = str(df["Noms_dispos"].iloc[0]) if len(df) > 0 else ""
     separator = "," if "," in sample_cell else ";"
     
@@ -94,7 +94,7 @@ if uploaded_file:
         st.warning("Aucun enfant détecté ! Vérifie le CSV")
         st.stop()
 
-    # PARAMÈTRES DES CRÉNEAUX
+    # ================== PARAMÈTRES CRÉNEAUX ==================
     st.markdown("## ⚙️ Paramètres des créneaux")
     col1, col2 = st.columns(2)
     with col1:
@@ -102,7 +102,7 @@ if uploaded_file:
     with col2:
         max_par_date = st.slider("👥 Maximum de personnes par créneau", min_par_date, 10, max(5, min_par_date))
 
-    # CALCUL DES DISPONIBILITÉS
+    # ================== CALCUL DISPONIBILITÉS ==================
     def compter_personnes(nom):
         return len(nom.split("/"))
     
@@ -121,13 +121,13 @@ if uploaded_file:
     ).reset_index(drop=True)
     st.dataframe(df_dispos, use_container_width=True, hide_index=True)
 
-    # INITIALISATION session_state
+    # ================== SESSION STATE ==================
     if "repartition" not in st.session_state:
         st.session_state.repartition = None
         st.session_state.output_excel = None
         st.session_state.output_pdf = None
 
-    # BOUTON RÉPARTITION
+    # ================== BOUTON RÉPARTITION ==================
     st.markdown("## ▶️ 5. Lancer la répartition")
     if st.button("Répartir les enfants"):
 
@@ -197,7 +197,7 @@ if uploaded_file:
 
         st.session_state.repartition = creneaux_info
 
-        # EXPORT EXCEL
+        # ========== EXPORT EXCEL ==========
         export_df = pd.DataFrame([
             {
                 "DATE": creneau['cle'].split(" | ")[0],
@@ -224,7 +224,7 @@ if uploaded_file:
                 worksheet.set_row(row, 35)
         st.session_state.output_excel = output_excel
 
-        # EXPORT PDF
+        # ========== EXPORT PDF ==========
         output_pdf = io.BytesIO()
         c = canvas.Canvas(output_pdf, pagesize=A4)
         width, height = A4
@@ -233,7 +233,12 @@ if uploaded_file:
         for r in creneaux_info:
             data.append([r['cle'].split(" | ")[0], r['cle'].split(" | ")[1],
                          ", ".join([n for e in r['affectes'] for n in e.split("/")])])
-        table = Table(data, colWidths=[120, 80, 300], rowHeights=35)
+        # Calcul hauteur ligne automatique pour tenir sur une page
+        page_margin_top = 50
+        page_margin_bottom = 30
+        available_height = height - page_margin_top - page_margin_bottom
+        row_height = available_height / len(data)
+        table = Table(data, colWidths=[120, 80, 300], rowHeights=row_height)
         style = TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#F2CEEF')),
             ('TEXTCOLOR',(0,0),(-1,0),colors.black),
@@ -244,13 +249,13 @@ if uploaded_file:
         ])
         table.setStyle(style)
         table.wrapOn(c, width, height)
-        table.drawOn(c, 30, height - 50 - 35*len(data))
+        table.drawOn(c, 30, height - page_margin_top - row_height*len(data))
         c.showPage()
         c.save()
         output_pdf.seek(0)
         st.session_state.output_pdf = output_pdf
 
-# AFFICHAGE RÉPARTITION ET BOUTONS
+# ================== AFFICHAGE RÉPARTITION ==================
 if st.session_state.repartition:
     repartition = st.session_state.repartition
     st.markdown("## 🧩 Répartition finale")
@@ -261,6 +266,20 @@ if st.session_state.repartition:
         nb_personnes = len(enfants_affichage)
         st.write(f"{creneau['cle']} : {', '.join(enfants_affichage)} ({max_par_date - nb_personnes} place(s) restante(s))")
 
+    # ========== COMPTE DES OCCURRENCES ==========
+    st.markdown("## 📈 Nombre de fois affecté par enfant / binôme")
+    compteurs_apres = {nom: 0 for nom in noms_uniques}
+    for creneau in repartition:
+        for e in creneau['affectes']:
+            for nom in e.split("/"):
+                compteurs_apres[nom] += 1
+    df_compteurs_apres = pd.DataFrame(
+        sorted(compteurs_apres.items(), key=lambda x: x[1]),
+        columns=["Enfant / binôme", "Nombre de fois affecté"]
+    )
+    st.dataframe(df_compteurs_apres, use_container_width=True, hide_index=True)
+
+    # ========== BOUTONS EXCEL / PDF ==========
     col_excel, col_pdf = st.columns(2)
     with col_excel:
         st.download_button(
