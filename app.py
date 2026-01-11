@@ -11,7 +11,7 @@ st.markdown("""
     margin-bottom: 0.5em;
     font-variant: small-caps;
 ">
-Répartition mini-bénévoles
+répartition mini-bénévoles
 </h1>
 """, unsafe_allow_html=True)
 
