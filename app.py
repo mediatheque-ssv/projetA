@@ -43,9 +43,9 @@ uploaded_file = st.file_uploader(
     "Importer le CSV",
     type=["csv"],
     help=(
-        "• Le CSV doit contenir exactement les colonnes : 'Date', 'Horaires' et 'Noms_dispos'.\n"
-        "• Chaque nom de bénévole doit être séparé par un point-virgule (Nom1;Nom2;Nom3).\n"
-        "• Pour un binôme, mettre un slash entre les deux noms (Nom1/Nom2).\n"
+        "• Le CSV doit contenir exactement les colonnes : 'Date', 'Horaires' et 'Noms_dispos'.  \n"
+        "• Chaque nom de bénévole doit être séparé par un point-virgule (Nom1;Nom2;Nom3).  \n"
+        "• Pour un binôme, mettre un slash entre les deux noms (Nom1/Nom2).  \n"
         "• Attention à toujours orthographier les noms de la même manière."
     )
 )
