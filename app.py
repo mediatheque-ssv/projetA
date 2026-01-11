@@ -269,21 +269,49 @@ if uploaded_file:
             st.markdown("## ⚠️ Enfants / binômes jamais affectés")
             st.write(", ".join(jamais_affectes))
 
-        # =====================================================
-        # 7️⃣ EXPORT CSV
-        # =====================================================
-        export_df = pd.DataFrame([
-            {
-                "Date_Horaire": creneau['cle'],
-                "Enfants_affectés": separator.join([e.replace("/", " et ") for e in creneau['affectes']]),
-                "Places_restantes": max_par_date - sum(compter_personnes(n) for n in creneau['affectes'])
-            }
-            for creneau in creneaux_info
-        ])
-        csv = export_df.to_csv(index=False, sep=";").encode("utf-8")
-        st.download_button(
-            "Télécharger la répartition CSV",
-            data=csv,
-            file_name="repartition.csv",
-            mime="text/csv"
-        )
+      # =====================================================
+      # 7️⃣ EXPORT EXCEL PRÉSENTABLE
+      # =====================================================
+      import io
+
+      # Préparer le DataFrame pour l'export Excel
+      export_df = pd.DataFrame([
+          {
+              "DATE": creneau['cle'].split(" | ")[0],
+              "HORAIRES": creneau['cle'].split(" | ")[1],
+              "NOMS DES MINI-BÉNÉVOLES": separator.join([e.replace("/", " et ") for e in creneau['affectes']])
+          }
+          for creneau in creneaux_info
+      ])
+
+      # Créer un fichier Excel en mémoire
+      output = io.BytesIO()
+      with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+          export_df.to_excel(writer, index=False, sheet_name="Répartition")
+          workbook = writer.book
+          worksheet = writer.sheets["Répartition"]
+
+         # Format pour les en-têtes
+          header_format = workbook.add_format({
+              'bold': True,
+              'text_wrap': True,
+              'valign': 'center',
+              'align': 'center',
+              'bg_color': '#F2CEEF',
+               'border': 1
+          })
+
+          # Appliquer le format aux en-têtes et ajuster largeur des colonnes
+          for col_num, value in enumerate(export_df.columns.values):
+              worksheet.write(0, col_num, value, header_format)
+              max_len = max(export_df[value].astype(str).map(len).max(), len(value)) + 2
+              worksheet.set_column(col_num, col_num, max_len)
+
+      # Bouton de téléchargement Excel
+      st.download_button(
+          "Télécharger la répartition Excel",
+          data=output.getvalue(),
+          file_name="repartition.xlsx",
+          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      )
+
