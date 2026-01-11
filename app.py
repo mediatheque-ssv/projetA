@@ -81,6 +81,9 @@ if uploaded_file:
             f"Colonnes détectées : {df.columns.tolist()}"
         )
         st.stop()
+        
+    st.markdown("### Aperçu du CSV")
+    st.dataframe(df)
 
     # =====================================================
     # 2️⃣ EXTRACTION DES NOMS (avec binômes groupés)
@@ -168,6 +171,7 @@ if uploaded_file:
     # =====================================================
     # 5️⃣ RÉPARTITION AUTOMATIQUE
     # =====================================================
+    st.markdown("---")
     st.markdown("## ▶️ 5. Lancer la répartition")
     if st.button("Répartir les enfants"):
 
@@ -204,7 +208,6 @@ if uploaded_file:
         for _, row in df_sorted.iterrows():
             date = str(row["Date"]).strip() or "1900-01-01"
             horaire = str(row["Horaires"]).strip() or "00:00"
-            # transformer 10h -> 10h - 11h, 15h -> 15h - 16h
             if horaire.startswith("10"):
                 horaire_export = "10h - 11h"
             elif horaire.startswith("15"):
@@ -275,12 +278,11 @@ if uploaded_file:
         # =====================================================
         # 7️⃣ EXPORT EXCEL PRÉSENTABLE
         # =====================================================
-        # Préparer le DataFrame pour l'export Excel
         export_df = pd.DataFrame([
             {
                 "DATE": creneau['cle'].split(" | ")[0],
                 "HORAIRES": creneau['cle'].split(" | ")[1],
-                "NOMS DES MINI-BÉNÉVOLES": ", ".join([e.replace("/", " et ") for e in creneau['affectes']])
+                "NOMS DES MINI-BÉNÉVOLES": ", ".join(creneau['affectes'])  # juste virgules
             }
             for creneau in creneaux_info
         ])
@@ -292,7 +294,6 @@ if uploaded_file:
             workbook = writer.book
             worksheet = writer.sheets["Répartition"]
 
-            # Format pour les en-têtes
             header_format = workbook.add_format({
                 'bold': True,
                 'text_wrap': True,
@@ -302,14 +303,12 @@ if uploaded_file:
                 'border': 1
             })
 
-            # Format pour les cellules normales
             cell_format = workbook.add_format({
                 'valign': 'vcenter',
                 'align': 'center',
                 'border': 1
             })
 
-            # Appliquer le format aux en-têtes et aux cellules
             for col_num, value in enumerate(export_df.columns.values):
                 worksheet.write(0, col_num, value, header_format)
                 for row_num, val in enumerate(export_df[value], start=1):
@@ -317,14 +316,13 @@ if uploaded_file:
                 max_len = max(export_df[value].astype(str).map(len).max(), len(value)) + 2
                 worksheet.set_column(col_num, col_num, max_len)
 
-            # Ajuster hauteur des lignes
             worksheet.set_row(0, 35)  # en-tête
             for row in range(1, len(export_df)+1):
                 worksheet.set_row(row, 30)  # lignes de données
 
-        # Bouton de téléchargement Excel
+        # Bouton de téléchargement **hors du st.button** pour conserver l'affichage
         st.download_button(
-            "Télécharger le tableau Excel",
+            "Télécharger la répartition Excel",
             data=output.getvalue(),
             file_name="repartition.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
