@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import random
+import io
 
 st.markdown("""
 <style>
@@ -62,7 +63,6 @@ uploaded_file = st.file_uploader(
         "• Attention à toujours orthographier les noms de la même manière."
     )
 )
-
 
 if uploaded_file:
 
@@ -269,48 +269,41 @@ if uploaded_file:
             st.markdown("## ⚠️ Enfants / binômes jamais affectés")
             st.write(", ".join(jamais_affectes))
 
-      # =====================================================
-      # 7️⃣ EXPORT EXCEL PRÉSENTABLE
-      # =====================================================
-      import io
+        # =====================================================
+        # 7️⃣ EXPORT EXCEL PRÉSENTABLE
+        # =====================================================
+        export_df = pd.DataFrame([
+            {
+                "DATE": creneau['cle'].split(" | ")[0],
+                "HORAIRES": creneau['cle'].split(" | ")[1],
+                "NOMS DES MINI-BÉNÉVOLES": separator.join([e.replace("/", " et ") for e in creneau['affectes']])
+            }
+            for creneau in creneaux_info
+        ])
 
-      # Préparer le DataFrame pour l'export Excel
-      export_df = pd.DataFrame([
-          {
-              "DATE": creneau['cle'].split(" | ")[0],
-              "HORAIRES": creneau['cle'].split(" | ")[1],
-              "NOMS DES MINI-BÉNÉVOLES": separator.join([e.replace("/", " et ") for e in creneau['affectes']])
-          }
-          for creneau in creneaux_info
-      ])
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            export_df.to_excel(writer, index=False, sheet_name="Répartition")
+            workbook = writer.book
+            worksheet = writer.sheets["Répartition"]
 
-      # Créer un fichier Excel en mémoire
-      output = io.BytesIO()
-      with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-          export_df.to_excel(writer, index=False, sheet_name="Répartition")
-          workbook = writer.book
-          worksheet = writer.sheets["Répartition"]
+            header_format = workbook.add_format({
+                'bold': True,
+                'text_wrap': True,
+                'valign': 'center',
+                'align': 'center',
+                'bg_color': '#F2CEEF',
+                'border': 1
+            })
 
-          # Format pour les en-têtes
-          header_format = workbook.add_format({
-              'bold': True,
-              'text_wrap': True,
-              'valign': 'center',
-              'align': 'center',
-              'bg_color': '#F2CEEF',
-              'border': 1
-          })
+            for col_num, value in enumerate(export_df.columns.values):
+                worksheet.write(0, col_num, value, header_format)
+                max_len = max(export_df[value].astype(str).map(len).max(), len(value)) + 2
+                worksheet.set_column(col_num, col_num, max_len)
 
-          # Appliquer le format aux en-têtes et ajuster largeur des colonnes
-          for col_num, value in enumerate(export_df.columns.values):
-              worksheet.write(0, col_num, value, header_format)
-              max_len = max(export_df[value].astype(str).map(len).max(), len(value)) + 2
-              worksheet.set_column(col_num, col_num, max_len)
-
-      # Bouton de téléchargement Excel
-      st.download_button(
-          "Télécharger la répartition Excel",
-          data=output.getvalue(),
-          file_name="repartition.xlsx",
-          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      )
+        st.download_button(
+            "Télécharger la répartition Excel",
+            data=output.getvalue(),
+            file_name="repartition.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
