@@ -111,6 +111,13 @@ if uploaded_file:
     with col2:
         max_par_date = st.slider("👥 Maximum de personnes par créneau", min_par_date, 10, max(5, min_par_date))
 
+    st.markdown("### Contraintes d'occurrences par enfant / binôme")
+    col3, col4 = st.columns(2)
+    with col3:
+        min_occurrences = st.slider("🔢 Minimum d'occurrences par enfant/binôme", 0, 10, 0)
+    with col4:
+        max_occurrences = st.slider("🔢 Maximum d'occurrences par enfant/binôme", min_occurrences, 20, 10)
+
     # ===========================
     # CALCUL DES DISPONIBILITÉS
     # ===========================
@@ -144,7 +151,7 @@ if uploaded_file:
     # ===========================
     # BOUTON RÉPARTITION
     # ===========================
-    st.markdown("## ▶️ 5. Lancer la répartition")
+    st.markdown("## ▶️ Lancer la répartition")
     if st.button("Répartir les enfants"):
 
         compteur = {nom: 0 for nom in noms_uniques}
@@ -195,6 +202,10 @@ if uploaded_file:
             candidats = []
             for n in dispos:
                 if n not in creneau['affectes']:
+                    # Vérifier si l'enfant n'a pas déjà atteint le maximum d'occurrences
+                    if compteur[n] >= max_occurrences:
+                        continue
+                    
                     distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                     if distance >= DELAI_MINIMUM:
                         nb_dispos = dispos_par_entite[n]
@@ -210,6 +221,14 @@ if uploaded_file:
                     compteur[nom] += 1
                     affectations[nom].append(date_horaire_dt)
                     nb_personnes_affectees += nb_personnes_ce_nom
+
+        # Vérifier les contraintes min d'occurrences
+        enfants_sous_minimum = {nom: count for nom, count in compteur.items() if count < min_occurrences}
+        if enfants_sous_minimum:
+            st.warning(f"⚠️ Certains enfants/binômes n'ont pas atteint le minimum de {min_occurrences} occurrence(s) :")
+            for nom, count in enfants_sous_minimum.items():
+                st.write(f"• {nom} : {count} occurrence(s) au lieu de {min_occurrences} minimum")
+            st.info("💡 Essayez d'augmenter le nombre maximum de personnes par créneau ou de réduire le minimum d'occurrences.")
 
         # Stocker dans session_state
         st.session_state.repartition = creneaux_info
