@@ -15,8 +15,6 @@ Répartition mini-bénévoles
 </h1>
 """, unsafe_allow_html=True)
 
-
-
 # =====================================================
 # STYLE GÉNÉRAL (boutons et séparateurs)
 # =====================================================
