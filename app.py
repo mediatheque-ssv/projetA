@@ -112,9 +112,13 @@ if uploaded_file:
         max_par_date = st.slider("👥 Maximum de personnes par créneau", min_par_date, 10, max(5, min_par_date))
 
     st.markdown("### Contraintes d'occurrences par enfant / binôme")
+    
+    # Calculer le minimum de disponibilités parmi tous les bénévoles
+    min_dispos_total = min(dispos_par_entite.values()) if dispos_par_entite else 0
+    
     col3, col4 = st.columns(2)
     with col3:
-        min_occurrences = st.slider("🔢 Minimum d'occurrences par enfant/binôme", 0, 10, 0)
+        min_occurrences = st.slider("🔢 Minimum d'occurrences par enfant/binôme", 0, 10, min_dispos_total)
     with col4:
         max_occurrences = st.slider("🔢 Maximum d'occurrences par enfant/binôme", min_occurrences, 20, 10)
 
@@ -249,32 +253,47 @@ if uploaded_file:
         MAX_TENTATIVES = 50
         meilleure_repartition = None
         meilleur_compteur = None
-        meilleur_score = float('inf')  # Nombre d'enfants hors contraintes
+        meilleur_score = float('inf')  # Score de pénalité global
         
         with st.spinner(f'🔄 Recherche de la meilleure répartition (max {MAX_TENTATIVES} tentatives)...'):
             for tentative in range(MAX_TENTATIVES):
                 creneaux_info, compteur = faire_repartition()
                 
-                # Vérifier si toutes les contraintes sont respectées
-                enfants_hors_contraintes = 0
+                # Calculer le score de pénalité
+                score = 0
+                
+                # Pénalité pour les enfants hors contraintes min/max occurrences
                 for nom, count in compteur.items():
-                    if count < min_occurrences or count > max_occurrences:
-                        enfants_hors_contraintes += 1
+                    if count < min_occurrences:
+                        score += (min_occurrences - count) * 10  # Pénalité forte
+                    if count > max_occurrences:
+                        score += (count - max_occurrences) * 10  # Pénalité forte
+                
+                # Pénalité pour les créneaux hors contraintes min/max personnes
+                for creneau in creneaux_info:
+                    enfants_affichage = []
+                    for e in creneau['affectes']:
+                        enfants_affichage.extend(e.split("/"))
+                    nb_personnes = len(enfants_affichage)
+                    
+                    if nb_personnes < min_par_date:
+                        score += (min_par_date - nb_personnes) * 5  # Pénalité moyenne
+                    # Pas de pénalité pour dépassement max_par_date car l'algo le respecte déjà
                 
                 # Garder la meilleure tentative
-                if enfants_hors_contraintes < meilleur_score:
-                    meilleur_score = enfants_hors_contraintes
+                if score < meilleur_score:
+                    meilleur_score = score
                     meilleure_repartition = creneaux_info
                     meilleur_compteur = compteur
                 
-                # Si on a trouvé une répartition parfaite, on s'arrête
-                if enfants_hors_contraintes == 0:
+                # Si on a trouvé une répartition parfaite (score = 0), on s'arrête
+                if score == 0:
                     st.success(f'✅ Répartition parfaite trouvée en {tentative + 1} tentative(s) !')
                     break
             else:
                 # Si on arrive ici, aucune répartition parfaite n'a été trouvée
                 if meilleur_score > 0:
-                    st.warning(f'⚠️ Après {MAX_TENTATIVES} tentatives, {meilleur_score} enfant(s)/binôme(s) ne respectent pas les contraintes min/max.')
+                    st.info(f'ℹ️ Meilleure répartition trouvée après {MAX_TENTATIVES} tentatives (certaines contraintes ne peuvent pas être respectées).')
 
         creneaux_info = meilleure_repartition
         compteur = meilleur_compteur
@@ -282,9 +301,18 @@ if uploaded_file:
         creneaux_info = meilleure_repartition
         compteur = meilleur_compteur
 
-        # Vérifier les contraintes et afficher les détails si nécessaire
+        # Vérifier et afficher toutes les contraintes
         enfants_sous_minimum = {nom: count for nom, count in compteur.items() if count < min_occurrences}
         enfants_sur_maximum = {nom: count for nom, count in compteur.items() if count > max_occurrences}
+        
+        creneaux_sous_minimum = []
+        for creneau in creneaux_info:
+            enfants_affichage = []
+            for e in creneau['affectes']:
+                enfants_affichage.extend(e.split("/"))
+            nb_personnes = len(enfants_affichage)
+            if nb_personnes < min_par_date:
+                creneaux_sous_minimum.append((creneau['cle'], nb_personnes))
         
         if enfants_sous_minimum:
             st.warning(f"⚠️ {len(enfants_sous_minimum)} enfant(s)/binôme(s) n'ont pas atteint le minimum de {min_occurrences} occurrence(s) :")
@@ -297,6 +325,12 @@ if uploaded_file:
             for nom, count in enfants_sur_maximum.items():
                 st.write(f"• {nom} : {count} occurrence(s)")
             st.info("💡 Essayez d'augmenter le maximum d'occurrences ou de réduire le nombre maximum de personnes par créneau.")
+        
+        if creneaux_sous_minimum:
+            st.warning(f"⚠️ {len(creneaux_sous_minimum)} créneau(x) n'ont pas atteint le minimum de {min_par_date} personne(s) :")
+            for cle, nb in creneaux_sous_minimum:
+                st.write(f"• {cle} : {nb} personne(s)")
+            st.info("💡 Vérifiez les disponibilités ou réduisez le minimum de personnes par créneau.")
 
         # Stocker dans session_state
         st.session_state.repartition = creneaux_info
