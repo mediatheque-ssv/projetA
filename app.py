@@ -249,10 +249,7 @@ if uploaded_file:
             enfants_raw = creneau['affectes']
             enfants_affichage = []
             for e in enfants_raw:
-                if "/" in e:
-                    enfants_affichage.extend(e.split("/"))
-                else:
-                    enfants_affichage.append(e)
+                enfants_affichage.extend(e.split("/"))
             nb_personnes = len(enfants_affichage)
             st.write(
                 f"{creneau['cle']} : {', '.join(enfants_affichage) if enfants_affichage else 'Aucun'} "
@@ -271,9 +268,7 @@ if uploaded_file:
             st.markdown("## ⚠️ Enfants / binômes jamais affectés")
             st.write(", ".join(jamais_affectes))
 
-        # =====================================================
-        # 7️⃣ EXPORT EXCEL PRÉSENTABLE
-        # =====================================================
+        # Préparer le DataFrame Excel pour téléchargement
         export_df = pd.DataFrame([
             {
                 "DATE": creneau['cle'].split(" | ")[0],
@@ -283,43 +278,45 @@ if uploaded_file:
             for creneau in creneaux_info
         ])
 
-        # Créer un fichier Excel en mémoire
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            export_df.to_excel(writer, index=False, sheet_name="Répartition")
-            workbook = writer.book
-            worksheet = writer.sheets["Répartition"]
+# =====================================================
+# 7️⃣ BOUTON DE TÉLÉCHARGEMENT EXCEL (hors st.button)
+# =====================================================
+if 'export_df' in locals():  # si on a calculé la répartition
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        export_df.to_excel(writer, index=False, sheet_name="Répartition")
+        workbook = writer.book
+        worksheet = writer.sheets["Répartition"]
 
-            header_format = workbook.add_format({
-                'bold': True,
-                'text_wrap': True,
-                'valign': 'vcenter',
-                'align': 'center',
-                'bg_color': '#F2CEEF',
-                'border': 1
-            })
+        header_format = workbook.add_format({
+            'bold': True,
+            'text_wrap': True,
+            'valign': 'vcenter',
+            'align': 'center',
+            'bg_color': '#F2CEEF',
+            'border': 1
+        })
 
-            cell_format = workbook.add_format({
-                'valign': 'vcenter',
-                'align': 'center',
-                'border': 1
-            })
+        cell_format = workbook.add_format({
+            'valign': 'vcenter',
+            'align': 'center',
+            'border': 1
+        })
 
-            for col_num, value in enumerate(export_df.columns.values):
-                worksheet.write(0, col_num, value, header_format)
-                for row_num, val in enumerate(export_df[value], start=1):
-                    worksheet.write(row_num, col_num, val, cell_format)
-                max_len = max(export_df[value].astype(str).map(len).max(), len(value)) + 2
-                worksheet.set_column(col_num, col_num, max_len)
+        for col_num, value in enumerate(export_df.columns.values):
+            worksheet.write(0, col_num, value, header_format)
+            for row_num, val in enumerate(export_df[value], start=1):
+                worksheet.write(row_num, col_num, val, cell_format)
+            max_len = max(export_df[value].astype(str).map(len).max(), len(value)) + 2
+            worksheet.set_column(col_num, col_num, max_len)
 
-            worksheet.set_row(0, 35)  # en-tête
-            for row in range(1, len(export_df)+1):
-                worksheet.set_row(row, 30)  # lignes de données
+        worksheet.set_row(0, 35)  # en-tête
+        for row in range(1, len(export_df)+1):
+            worksheet.set_row(row, 30)  # lignes de données
 
-        # Bouton de téléchargement **hors du st.button** pour conserver l'affichage
-        st.download_button(
-            "Télécharger la répartition Excel",
-            data=output.getvalue(),
-            file_name="repartition.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+    st.download_button(
+        "Télécharger la répartition Excel",
+        data=output.getvalue(),
+        file_name="repartition.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
