@@ -42,6 +42,9 @@ uploaded_file = st.file_uploader(
     "Importer le CSV (Date ; Horaires ; Noms_dispos)",
     type=["csv"]
 )
+ st.info(
+            f"Chaque nom de bénévole doit être séparé par un point-virgule (Nom1;Nom2;Nom3). Pour un binôme, mettre un slash entre les deux noms (ex : Nom1/Nom2)."
+            f"Attention à toujours orthographier les noms de la même façon."
 
 if uploaded_file:
 
@@ -99,8 +102,6 @@ if uploaded_file:
 
         st.info(
             f"🔎 {len(noms_uniques)} entité(s) détectée(s) • "
-            f"Séparateur utilisé : '{separator}' • "
-            "Les binômes doivent être notés sous la forme Nom1/Nom2"
         )
     else:
         st.warning("Aucun enfant détecté ! Vérifie le CSV")
