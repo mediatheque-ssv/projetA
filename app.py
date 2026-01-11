@@ -209,7 +209,11 @@ if uploaded_file:
                     distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                     if distance >= DELAI_MINIMUM:
                         nb_dispos = dispos_par_entite[n]
+                        # Bonus pour ceux qui ont peu de disponibilités
                         bonus = -100 if nb_dispos < 5 else 0
+                        # GROS bonus pour ceux en dessous du minimum d'occurrences
+                        if compteur[n] < min_occurrences:
+                            bonus -= 1000
                         alea_compteur = random.uniform(-0.5, 0.5)
                         alea_dispos = random.uniform(-1, 1)
                         candidats.append((n, compteur[n] + bonus + alea_compteur, nb_dispos + alea_dispos))
