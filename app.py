@@ -25,7 +25,7 @@ st.markdown("""
     color: white;
     border-radius: 12px;
     padding: 0.6em 1.2em;
-    font-size: 0.5em;
+    font-size: 1.05em;
     font-weight: 600;
 }
 .stButton>button:hover {
