@@ -4,22 +4,39 @@ import random
 
 st.markdown("""
 <style>
-.stMarkdown p {
-    font-size: 14px;
-}
-</style>
-
-<h1 style="
+/* Titre principal h1 déjà stylé */
+h1 {
     color: #6D28D9; 
     font-size: 2.5em; 
     font-weight: 800; 
     text-align: center; 
     margin-bottom: 0.5em;
     font-variant: small-caps;
-">
-répartition mini-bénévoles
-</h1>
+}
+
+/* h2 = titres de section comme "Import du CSV" */
+h2 {
+    font-size: 1.5em;  /* réduire par rapport à la taille par défaut */
+    font-weight: 700;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+}
+
+/* h3 = sous-titres comme "Aperçu du CSV" */
+h3 {
+    font-size: 1.2em; 
+    font-weight: 600;
+    margin-top: 0.8em;
+    margin-bottom: 0.4em;
+}
+
+/* texte normal dans st.markdown si besoin */
+.stMarkdown p {
+    font-size: 14px;
+}
+</style>
 """, unsafe_allow_html=True)
+
 
 # =====================================================
 # STYLE GÉNÉRAL (boutons et séparateurs)
