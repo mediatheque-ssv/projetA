@@ -40,9 +40,9 @@ hr {
 st.markdown("## 📂 Import du CSV")
 
 uploaded_file = st.file_uploader(
-    "Importer le CSV (contenant exactement les colonnes : 'Date', 'Horaires' et 'Noms_dispos')\n"
-    "Chaque nom de bénévole doit être séparé par un point-virgule (ex : Nom1;Nom2;Nom3). "
-    "Pour un binôme, utilisez un slash entre les deux noms (ex : Nom1/Nom2). "
+    "Importer le CSV (contenant exactement les colonnes : 'Date', 'Horaires' et 'Noms_dispos')  \n"
+    "Chaque nom de bénévole doit être séparé par un point-virgule (ex : Nom1;Nom2;Nom3).  \n"
+    "Pour un binôme, utilisez un slash entre les deux noms (ex : Nom1/Nom2).  \n"
     "Attention à toujours orthographier les noms de la même manière.",
     type=["csv"]
 )
