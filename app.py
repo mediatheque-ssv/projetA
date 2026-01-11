@@ -274,10 +274,18 @@ if uploaded_file:
         # =====================================================
 
         # Préparer le DataFrame pour l'export Excel
+        def format_horaire(h):
+            if h.startswith("10"):
+                return "10h - 11h"
+            elif h.startswith("15"):
+                return "15h - 16h"
+            else:
+                return h
+
         export_df = pd.DataFrame([
             {
                 "DATE": creneau['cle'].split(" | ")[0],
-                "HORAIRES": creneau['cle'].split(" | ")[1],
+                "HORAIRES": format_horaire(creneau['cle'].split(" | ")[1]),
                 "NOMS DES MINI-BÉNÉVOLES": ", ".join([e.replace("/", " et ") for e in creneau['affectes']])
             }
             for creneau in creneaux_info
@@ -315,6 +323,10 @@ if uploaded_file:
                 # Ajuster la largeur de la colonne
                 max_len = max(export_df[value].astype(str).map(len).max(), len(value)) + 2
                 worksheet.set_column(col_num, col_num, max_len)
+
+            # Augmenter la hauteur des lignes
+            for row in range(1, len(export_df)+1):
+                worksheet.set_row(row, 30)  # hauteur = 30
 
         # Bouton de téléchargement Excel
         st.download_button(
