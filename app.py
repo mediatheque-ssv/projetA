@@ -269,7 +269,15 @@ if uploaded_file:
                     if count > max_occurrences:
                         score += (count - max_occurrences) * 10  # Pénalité forte
                 
-                # Pas de pénalité pour les créneaux (min est juste informatif, max est déjà respecté par l'algo)
+                # Pénalité pour les créneaux qui n'atteignent pas le maximum
+                for creneau in creneaux_info:
+                    enfants_affichage = []
+                    for e in creneau['affectes']:
+                        enfants_affichage.extend(e.split("/"))
+                    nb_personnes = len(enfants_affichage)
+                    
+                    if nb_personnes < max_par_date:
+                        score += (max_par_date - nb_personnes) * 5  # Pénalité moyenne
                 
                 # Garder la meilleure tentative
                 if score < meilleur_score:
