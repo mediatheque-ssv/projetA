@@ -298,14 +298,14 @@ if st.session_state.get("repartition"):
     col_excel, col_pdf = st.columns(2)
     with col_excel:
         st.download_button(
-            "Télécharger la répartition Excel",
+            "Télécharger le tableau (Excel)",
             data=st.session_state.output_excel.getvalue(),
             file_name="repartition.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     with col_pdf:
         st.download_button(
-            "Télécharger la répartition PDF",
+            "Télécharger le tableau (PDF)",
             data=st.session_state.output_pdf.getvalue(),
             file_name="repartition.pdf",
             mime="application/pdf"
