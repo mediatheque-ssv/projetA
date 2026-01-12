@@ -7,11 +7,17 @@ from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle
 
+# ===========================
+# FONCTIONS
+# ===========================
 def dataframe_left(df, colonne):
     return df.style.set_properties(
         subset=[colonne],
         **{"text-align": "left"}
     )
+
+def compter_personnes(nom):
+    return len(nom.split("/"))
 
 # ===========================
 # STYLE
@@ -46,9 +52,6 @@ répartition mini-bénévoles
 </h1>
 """, unsafe_allow_html=True)
 
-# Avant l'upload, on initialise la variable
-noms_uniques = []
-
 # ===========================
 # IMPORT CSV
 # ===========================
@@ -65,9 +68,9 @@ uploaded_file = st.file_uploader(
     )
 )
 
-if uploaded_file:
+noms_uniques = []
 
-    # Lecture CSV
+if uploaded_file:
     try:
         df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
     except Exception as e:
@@ -97,12 +100,9 @@ if uploaded_file:
         if n.strip()
     })
 
-      # ===========================
+    # ===========================
     # CALCUL DES DISPONIBILITÉS
     # ===========================
-    def compter_personnes(nom):
-        return len(nom.split("/"))
-    
     dispos_par_entite = {nom: 0 for nom in noms_uniques}
     for _, row in df.iterrows():
         dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
@@ -111,57 +111,26 @@ if uploaded_file:
             if n in dispos_par_entite:
                 dispos_par_entite[n] += 1
 
- # ===========================
-# ENFANTS ET BINÔMES DÉTECTÉS
-# ===========================
-st.markdown("### 🧒 Enfants et binômes détectés")
+    # ===========================
+    # AFFICHAGE ENFANTS / BINÔMES
+    # ===========================
+    st.markdown("### 🧒 Enfants et binômes détectés")
+    if noms_uniques:
+        df_noms = pd.DataFrame(
+            {
+                "Enfant / binôme": noms_uniques,
+                "Type": ["Binôme" if "/" in nom else "Enfant seul" for nom in noms_uniques],
+                "Nombre de disponibilités": [dispos_par_entite[n] for n in noms_uniques]
+            }
+        ).sort_values("Nombre de disponibilités").reset_index(drop=True)
 
-if noms_uniques:
-    df_noms = pd.DataFrame(
-        {
-            "Enfant / binôme": noms_uniques,
-            "Type": ["Binôme" if "/" in nom else "Enfant seul" for nom in noms_uniques],
-            "Nombre de disponibilités": [dispos_par_entite[n] for n in noms_uniques]
-        }
-    ).sort_values("Nombre de disponibilités").reset_index(drop=True)
+        df_noms["Nombre de disponibilités"] = df_noms["Nombre de disponibilités"].astype(str)
+        st.dataframe(dataframe_left(df_noms, "Nombre de disponibilités"), use_container_width=True, hide_index=True)
+        st.info(f"🔎 {len(noms_uniques)} entité(s) détectée(s)")
+    else:
+        st.warning("Aucun enfant détecté ! Vérifie le CSV")
+        st.stop()
 
-    # Convertir la colonne en str pour forcer l'alignement à gauche
-    df_noms["Nombre de disponibilités"] = df_noms["Nombre de disponibilités"].astype(str)
-
-    st.dataframe(
-        dataframe_left(df_noms, "Nombre de disponibilités"),
-        use_container_width=True,
-        hide_index=True
-    )
-
-    st.info(f"🔎 {len(noms_uniques)} entité(s) détectée(s)")
-else:
-    st.warning("Aucun enfant détecté ! Vérifie le CSV")
-    st.stop()
-
-
-# ===========================
-# OCCURRENCES PAR ENFANT / BINÔME
-# ===========================
-if st.session_state.get("repartition"):
-    repartition = st.session_state.repartition
-    compteur = st.session_state.compteur
-
-    st.markdown("#### Occurrences par enfant / binôme")
-
-    compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
-    df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
-
-    # Convertir la colonne en str pour alignement à gauche
-    df_occ["Nombre d'occurrences"] = df_occ["Nombre d'occurrences"].astype(str)
-
-    st.dataframe(
-        dataframe_left(df_occ, "Nombre d'occurrences"),
-        use_container_width=True,
-        hide_index=True
-    )
-
-    
     # ===========================
     # PARAMÈTRES CRÉNEAUX
     # ===========================
@@ -172,24 +141,12 @@ if st.session_state.get("repartition"):
     with col2:
         max_par_date = st.slider("👥 Maximum de mini-b par créneau", min_par_date, 10, max(5, min_par_date))
     
-    # Calculer le minimum de disponibilités parmi tous les bénévoles
     min_dispos_total = min(dispos_par_entite.values()) if dispos_par_entite else 0
-    
     col3, col4 = st.columns(2)
     with col3:
         min_occurrences = st.slider("🔢 Minimum d'occurrences par mini-b", 0, 10, min_dispos_total)
     with col4:
         max_occurrences = st.slider("🔢 Maximum d'occurrences par mini-b", min_occurrences, 20, 6)
-    
-
-    # ===========================
-    # INITIALISATION session_state
-    # ===========================
-    if "repartition" not in st.session_state:
-        st.session_state.repartition = None
-        st.session_state.output_excel = None
-        st.session_state.output_pdf = None
-        st.session_state.compteur = None
 
     # ===========================
     # BOUTON RÉPARTITION
@@ -197,12 +154,11 @@ if st.session_state.get("repartition"):
     st.markdown("### 🪄 Répartition")
     if st.button("✨ Répartir les enfants"):
 
-        # Fonction pour effectuer une répartition complète
+        # Fonction principale de répartition
         def faire_repartition():
             compteur = {nom: 0 for nom in noms_uniques}
             affectations = {nom: [] for nom in noms_uniques}
             DELAI_MINIMUM = 6
-
             mois_fr = {
                 'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
                 'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
@@ -239,39 +195,27 @@ if st.session_state.get("repartition"):
                 cle = f"{date} | {horaire_export}"
                 creneaux_info.append({'cle': cle, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
 
-            # Affectation en plusieurs passes pour atteindre les minimums
+            # Passes multiples
             MAX_PASSES = 5
             for passe in range(MAX_PASSES):
                 amelioration = False
-                
                 for creneau in creneaux_info:
                     date_horaire_dt = creneau['dt']
-                    dispos = creneau['dispos']
                     nb_personnes_affectees = sum(compter_personnes(n) for n in creneau['affectes'])
-                    
-                    # Si le créneau est plein, on passe au suivant
                     if nb_personnes_affectees >= max_par_date:
                         continue
-                    
                     candidats = []
-                    for n in dispos:
-                        if n not in creneau['affectes']:
-                            # Vérifier si l'enfant n'a pas déjà atteint le maximum d'occurrences
-                            if compteur[n] >= max_occurrences:
-                                continue
-                            
+                    for n in creneau['dispos']:
+                        if n not in creneau['affectes'] and compteur[n] < max_occurrences:
                             distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
                             if distance >= DELAI_MINIMUM:
                                 nb_dispos = dispos_par_entite[n]
-                                # Bonus pour ceux qui ont peu de disponibilités
                                 bonus = -100 if nb_dispos < 5 else 0
-                                # GROS bonus pour ceux en dessous du minimum d'occurrences
                                 if compteur[n] < min_occurrences:
                                     bonus -= 1000
                                 alea_compteur = random.uniform(-0.5, 0.5)
                                 alea_dispos = random.uniform(-1, 1)
-                                candidats.append((n, compteur[n] + bonus + alea_compteur, nb_dispos + alea_dispos))
-                    
+                                candidats.append((n, compteur[n]+bonus+alea_compteur, nb_dispos+alea_dispos))
                     candidats.sort(key=lambda x: (x[1], x[2]))
                     for nom, _, _ in candidats:
                         nb_personnes_ce_nom = compter_personnes(nom)
@@ -281,158 +225,43 @@ if st.session_state.get("repartition"):
                             affectations[nom].append(date_horaire_dt)
                             nb_personnes_affectees += nb_personnes_ce_nom
                             amelioration = True
-                
-                # Si on n'a rien pu améliorer, on arrête les passes
                 if not amelioration:
                     break
-            
             return creneaux_info, compteur
 
-        # Lancer jusqu'à 100 tentatives pour trouver une répartition parfaite
+        # Lancer plusieurs tentatives
         MAX_TENTATIVES = 100
         meilleure_repartition = None
         meilleur_compteur = None
-        meilleur_score = float('inf')  # Score de pénalité global
-        
+        meilleur_score = float('inf')
+
         with st.spinner(f'🔄 Recherche de la meilleure répartition (max {MAX_TENTATIVES} tentatives)...'):
             for tentative in range(MAX_TENTATIVES):
                 creneaux_info, compteur = faire_repartition()
-                
-                # Calculer le score de pénalité
                 score = 0
-                
-                # Pénalité pour les enfants hors contraintes min/max occurrences
                 for nom, count in compteur.items():
                     if count < min_occurrences:
-                        score += (min_occurrences - count) * 10  # Pénalité forte
+                        score += (min_occurrences - count)*10
                     if count > max_occurrences:
-                        score += (count - max_occurrences) * 10  # Pénalité forte
-                
-                # Pénalité pour les créneaux sous le minimum (mais pas pour ceux qui n'atteignent pas le max)
+                        score += (count - max_occurrences)*10
                 for creneau in creneaux_info:
-                    enfants_affichage = []
-                    for e in creneau['affectes']:
-                        enfants_affichage.extend(e.split("/"))
-                    nb_personnes = len(enfants_affichage)
-                    
-                    if nb_personnes < min_par_date:
-                        score += (min_par_date - nb_personnes) * 5  # Pénalité moyenne
-                
-                # Garder la meilleure tentative
+                    nb_p = sum(len(e.split("/")) for e in creneau['affectes'])
+                    if nb_p < min_par_date:
+                        score += (min_par_date - nb_p)*5
                 if score < meilleur_score:
                     meilleur_score = score
                     meilleure_repartition = creneaux_info
                     meilleur_compteur = compteur
-                
-                # Si on a trouvé une répartition parfaite (score = 0), on s'arrête
                 if score == 0:
-                    st.success(f'✅ Répartition parfaite trouvée en {tentative + 1} tentative(s) !')
+                    st.success(f'✅ Répartition parfaite trouvée en {tentative+1} tentative(s) !')
                     break
             else:
-                # Si on arrive ici, aucune répartition parfaite n'a été trouvée
                 if meilleur_score > 0:
-                    st.info(f'ℹ️ Meilleure répartition trouvée après {MAX_TENTATIVES} tentatives (certaines contraintes ne peuvent pas être respectées).')
+                    st.info(f"ℹ️ Meilleure répartition trouvée après {MAX_TENTATIVES} tentatives.")
 
-        creneaux_info = meilleure_repartition
-        compteur = meilleur_compteur
-
-        creneaux_info = meilleure_repartition
-        compteur = meilleur_compteur
-
-        # Vérifier et afficher toutes les contraintes
-        enfants_sous_minimum = {nom: count for nom, count in compteur.items() if count < min_occurrences}
-        enfants_sur_maximum = {nom: count for nom, count in compteur.items() if count > max_occurrences}
-        
-        creneaux_sous_minimum = []
-        for creneau in creneaux_info:
-            enfants_affichage = []
-            for e in creneau['affectes']:
-                enfants_affichage.extend(e.split("/"))
-            nb_personnes = len(enfants_affichage)
-            if nb_personnes < min_par_date:
-                creneaux_sous_minimum.append((creneau['cle'], nb_personnes))
-        
-        if enfants_sous_minimum:
-            st.warning(f"⚠️ {len(enfants_sous_minimum)} enfant(s)/binôme(s) n'ont pas atteint le minimum de {min_occurrences} occurrence(s) :")
-            for nom, count in enfants_sous_minimum.items():
-                st.write(f"• {nom} : {count} occurrence(s)")
-            st.info("💡 Essayez d'augmenter le nombre maximum de personnes par créneau ou de réduire le minimum d'occurrences.")
-        
-        if enfants_sur_maximum:
-            st.warning(f"⚠️ {len(enfants_sur_maximum)} enfant(s)/binôme(s) ont dépassé le maximum de {max_occurrences} occurrence(s) :")
-            for nom, count in enfants_sur_maximum.items():
-                st.write(f"• {nom} : {count} occurrence(s)")
-            st.info("💡 Essayez d'augmenter le maximum d'occurrences ou de réduire le nombre maximum de personnes par créneau.")
-        
-        if creneaux_sous_minimum:
-            st.warning(f"⚠️ {len(creneaux_sous_minimum)} créneau(x) n'ont pas atteint le minimum de {min_par_date} personne(s) :")
-            for cle, nb in creneaux_sous_minimum:
-                st.write(f"• {cle} : {nb} personne(s)")
-            st.info("💡 Vérifiez les disponibilités ou réduisez le minimum de personnes par créneau.")
-
-        # Stocker dans session_state
-        st.session_state.repartition = creneaux_info
-        st.session_state.compteur = compteur
-
-        # ===========================
-        # EXPORT EXCEL
-        # ===========================
-        export_df = pd.DataFrame([
-            {
-                "DATE": creneau['cle'].split(" | ")[0],
-                "HORAIRES": creneau['cle'].split(" | ")[1],
-                "NOMS DES MINI-BÉNÉVOLES": ", ".join([n for e in creneau['affectes'] for n in e.split("/")])
-            }
-            for creneau in creneaux_info
-        ])
-        output_excel = io.BytesIO()
-        with pd.ExcelWriter(output_excel, engine='xlsxwriter') as writer:
-            export_df.to_excel(writer, index=False, sheet_name="Répartition")
-            workbook = writer.book
-            worksheet = writer.sheets["Répartition"]
-            header_format = workbook.add_format({'bold': True,'valign':'vcenter','align':'center','bg_color':'#F2CEEF','border':1})
-            cell_format = workbook.add_format({'valign':'vcenter','align':'center','border':1})
-            for col_num, value in enumerate(export_df.columns.values):
-                worksheet.write(0, col_num, value, header_format)
-                for row_num, val in enumerate(export_df[value], start=1):
-                    worksheet.write(row_num, col_num, val, cell_format)
-                max_len = max(export_df[value].astype(str).map(len).max(), len(value)) + 2
-                worksheet.set_column(col_num, col_num, max_len)
-            worksheet.set_row(0, 40)
-            for row in range(1, len(export_df)+1):
-                worksheet.set_row(row, 35)
-        st.session_state.output_excel = output_excel
-
-        # ===========================
-        # EXPORT PDF
-        # ===========================
-        output_pdf = io.BytesIO()
-        c = canvas.Canvas(output_pdf, pagesize=A4)
-        width, height = A4
-        c.setFont("Helvetica", 12)
-        data = [["DATE", "HORAIRES", "NOMS DES MINI-BÉNÉVOLES"]]
-        for r in creneaux_info:
-            data.append([r['cle'].split(" | ")[0], r['cle'].split(" | ")[1],
-                         ", ".join([n for e in r['affectes'] for n in e.split("/")])])
-        # Calcul hauteur automatique pour tenir sur une page
-        available_height = height - 100
-        row_height = available_height / len(data)
-        table = Table(data, colWidths=[120, 80, 300], rowHeights=row_height)
-        style = TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#F2CEEF')),
-            ('TEXTCOLOR',(0,0),(-1,0),colors.black),
-            ('ALIGN',(0,0),(-1,-1),'CENTER'),
-            ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
-            ('GRID',(0,0),(-1,-1),1,colors.black),
-            ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold')
-        ])
-        table.setStyle(style)
-        table.wrapOn(c, width, height)
-        table.drawOn(c, 30, height - 50 - row_height*len(data))
-        c.showPage()
-        c.save()
-        output_pdf.seek(0)
-        st.session_state.output_pdf = output_pdf
+        # Stockage
+        st.session_state.repartition = meilleure_repartition
+        st.session_state.compteur = meilleur_compteur
 
 # ===========================
 # AFFICHAGE RÉPARTITION ET BOUTONS
@@ -440,22 +269,14 @@ if st.session_state.get("repartition"):
 if st.session_state.get("repartition"):
     repartition = st.session_state.repartition
     compteur = st.session_state.compteur
-    
-    # ORDRE INVERSÉ : D'abord les occurrences
+
+    # Occurrences
     st.markdown("#### Occurrences par enfant / binôme")
     compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
     df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
-    st.dataframe(
-        df_occ.style.set_properties(
-            subset=["Nombre d'occurrences"],
-            **{"text-align": "left"}
-        ),
-        use_container_width=True,
-        hide_index=True
-    )
+    st.dataframe(dataframe_left(df_occ, "Nombre d'occurrences"), use_container_width=True, hide_index=True)
 
-    
-    # Puis la répartition finale
+    # Répartition finale
     st.markdown("#### Répartition finale")
     for creneau in repartition:
         enfants_affichage = []
@@ -464,19 +285,19 @@ if st.session_state.get("repartition"):
         nb_personnes = len(enfants_affichage)
         st.write(f"{creneau['cle']} : {', '.join(enfants_affichage)} ({max_par_date - nb_personnes} place(s) restante(s))")
 
-    # Enfin les boutons de téléchargement
+    # Boutons téléchargement
     col_excel, col_pdf = st.columns(2)
     with col_excel:
         st.download_button(
             "📥 Télécharger le planning (Excel)",
-            data=st.session_state.output_excel.getvalue(),
+            data=st.session_state.output_excel.getvalue() if st.session_state.get("output_excel") else None,
             file_name="repartition.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     with col_pdf:
         st.download_button(
             "📥 Télécharger le planning (PDF)",
-            data=st.session_state.output_pdf.getvalue(),
+            data=st.session_state.output_pdf.getvalue() if st.session_state.get("output_pdf") else None,
             file_name="repartition.pdf",
             mime="application/pdf"
         )
