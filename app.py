@@ -166,8 +166,8 @@ if uploaded_file:
     # ---------------------------
     # Bouton Répartition
     # ---------------------------
-    st.markdown("### 🪄 Répartition")
-    if st.button("✨ Répartir les enfants"):
+    st.markdown("### 🪄 Élaboration du planning)
+    if st.button("✨ Répartir les mini-b"):
         with st.spinner("⏳ Calcul de la meilleure répartition…"):
             # Fonction principale
             def faire_repartition():
