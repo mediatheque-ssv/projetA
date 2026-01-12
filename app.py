@@ -431,7 +431,7 @@ if st.session_state.get("repartition"):
             b64_excel = base64.b64encode(st.session_state.output_excel.getvalue()).decode()
             st.markdown(f"""
             <a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64_excel}" download="repartition.xlsx" style="text-decoration:none;">
-                <button style="background-color:#107C41;color:white;padding:0.6em 1.2em;border-radius:12px;font-weight:600;font-size:1.05em;border:none;cursor:pointer;width:100%;">
+                <button style="background-color:#107C41;color:white;padding:0.6em 1.2em;border-radius:12px;font-weight:400;font-size:1.05em;border:none;cursor:pointer;width:100%;">
                     ⬇️ Télécharger le planning (Excel)
                 </button>
             </a>
@@ -442,7 +442,7 @@ if st.session_state.get("repartition"):
             b64_pdf = base64.b64encode(st.session_state.output_pdf.getvalue()).decode()
             st.markdown(f"""
             <a href="data:application/pdf;base64,{b64_pdf}" download="repartition.pdf" style="text-decoration:none;">
-                <button style="background-color:#DC2626;color:white;padding:0.6em 1.2em;border-radius:12px;font-weight:600;font-size:1.05em;border:none;cursor:pointer;width:100%;">
+                <button style="background-color:#DC2626;color:white;padding:0.6em 1.2em;border-radius:12px;font-weight:400;font-size:1.05em;border:none;cursor:pointer;width:100%;">
                     ⬇️ Télécharger le planning (PDF)
                 </button>
             </a>
