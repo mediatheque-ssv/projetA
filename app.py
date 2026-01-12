@@ -385,7 +385,7 @@ if st.session_state.get("repartition"):
     # ===========================
     # RÉPARTITION FINALE STYLÉE
     # ===========================
-    st.markdown("#### Planning proposé")
+    st.markdown("#### Répartition proposée")
     creneaux_display = []
 
     for creneau in repartition:
