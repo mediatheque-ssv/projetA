@@ -286,22 +286,17 @@ if st.session_state.get("repartition"):
         st.write(f"{creneau['cle']} : {', '.join(enfants_affichage)} ({max_par_date - nb_personnes} place(s) restante(s))")
 
     # Boutons téléchargement
-    # Boutons téléchargement
-col_excel, col_pdf = st.columns(2)
-
-with col_excel:
-    if st.session_state.get("output_excel") is not None:
+    col_excel, col_pdf = st.columns(2)
+    with col_excel:
         st.download_button(
-            "📥 Télécharger le planning (Excel)",
+            "Télécharger le tableau (Excel)",
             data=st.session_state.output_excel.getvalue(),
             file_name="repartition.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
-with col_pdf:
-    if st.session_state.get("output_pdf") is not None:
+    with col_pdf:
         st.download_button(
-            "📥 Télécharger le planning (PDF)",
+            "Télécharger le tableau (PDF)",
             data=st.session_state.output_pdf.getvalue(),
             file_name="repartition.pdf",
             mime="application/pdf"
