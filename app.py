@@ -288,6 +288,8 @@ if st.session_state.get("repartition"):
     # ===========================
     # BOUTONS TÉLÉCHARGEMENT
     # ===========================
+    st.write("Session Excel:", st.session_state.get("output_excel"))
+    st.write("Session PDF:", st.session_state.get("output_pdf"))
     if st.session_state.get("output_excel") or st.session_state.get("output_pdf"):
         col_excel, col_pdf = st.columns(2)
 
