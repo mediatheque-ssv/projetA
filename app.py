@@ -46,6 +46,9 @@ répartition mini-bénévoles
 </h1>
 """, unsafe_allow_html=True)
 
+# Avant l'upload, on initialise la variable
+noms_uniques = []
+
 # ===========================
 # IMPORT CSV
 # ===========================
