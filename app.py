@@ -19,13 +19,26 @@ def dataframe_left(df, colonne):
         **{"text-align": "left"}
     )
 
-def dataframe_left_all(df):
-    return df.style.set_properties(
-        **{"text-align": "left"}
-    )
+def style_repartition(df):
+    # Style général : tout à gauche
+    styles = [
+        {'selector': 'th', 'props': [('text-align', 'left')]},  # header à gauche
+        {'selector': 'td', 'props': [('text-align', 'left')]}   # toutes les cellules à gauche
+    ]
+    
+    # Couleur par ligne
+    def color_row(row):
+        if row["Places restantes"] == 0:
+            return ["background-color: #D1FAE5"]*len(row)  # vert clair = plein
+        elif row["Places restantes"] > max_par_date - min_par_date:
+            return ["background-color: #FEE2E2"]*len(row)  # rouge clair = sous-minimum
+        else:
+            return ["background-color: #F9F9F9"]*len(row)  # neutre
+
+    return df.style.apply(color_row, axis=1).set_table_styles(styles)
 
 # ===========================
-# STYLE STREAMLIT
+# STYLE
 # ===========================
 st.markdown("""
 <style>
@@ -85,16 +98,13 @@ if uploaded_file:
         except Exception as e:
             st.error(f"Erreur de lecture du CSV : {e}")
             st.stop()
-
         df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
-
         if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
             st.error(
                 "Le CSV doit contenir EXACTEMENT les colonnes : Date, Horaires, Noms_dispos\n"
                 f"Colonnes détectées : {df.columns.tolist()}"
             )
             st.stop()
-
         sample_cell = str(df["Noms_dispos"].iloc[0]) if len(df) > 0 else ""
         separator = "," if "," in sample_cell else ";"
         noms_uniques = sorted({
@@ -169,8 +179,6 @@ if uploaded_file:
     st.markdown("### 🪄 Répartition")
     if st.button("✨ Répartir les enfants"):
         with st.spinner("⏳ Calcul de la meilleure répartition…"):
-
-            # Fonction principale
             def faire_repartition():
                 compteur = {nom: 0 for nom in noms_uniques}
                 affectations = {nom: [] for nom in noms_uniques}
@@ -211,7 +219,6 @@ if uploaded_file:
                     cle = f"{date} | {horaire_export}"
                     creneaux_info.append({'cle': cle, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
 
-                # Passes multiples
                 MAX_PASSES = 5
                 for passe in range(MAX_PASSES):
                     amelioration = False
@@ -278,9 +285,7 @@ if uploaded_file:
             st.session_state.repartition = meilleure_repartition
             st.session_state.compteur = meilleur_compteur
 
-            # ===========================
             # Export Excel
-            # ===========================
             with st.spinner("⏳ Préparation du fichier Excel…"):
                 export_df = pd.DataFrame([
                     {
@@ -308,9 +313,7 @@ if uploaded_file:
                         worksheet.set_row(row, 35)
                 st.session_state.output_excel = output_excel
 
-            # ===========================
             # Export PDF
-            # ===========================
             with st.spinner("⏳ Préparation du fichier PDF…"):
                 output_pdf = io.BytesIO()
                 c = canvas.Canvas(output_pdf, pagesize=A4)
@@ -340,24 +343,20 @@ if uploaded_file:
                 st.session_state.output_pdf = output_pdf
 
 # ===========================
-# Affichage répartition et téléchargement
+# Affichage répartition finale
 # ===========================
 if st.session_state.get("repartition"):
     repartition = st.session_state.repartition
     compteur = st.session_state.compteur
 
-    # ---------------------------
-    # Occurrences par enfant / binôme
-    # ---------------------------
+    # Occurrences
     st.markdown("#### Occurrences par enfant / binôme")
     compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
     df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
     df_occ["Nombre d'occurrences"] = df_occ["Nombre d'occurrences"].astype(str)
     st.dataframe(dataframe_left(df_occ, "Nombre d'occurrences"), use_container_width=True, hide_index=True)
 
-    # ---------------------------
     # Répartition finale stylée
-    # ---------------------------
     st.markdown("#### Répartition finale")
     creneaux_display = []
     for creneau in repartition:
@@ -366,42 +365,16 @@ if st.session_state.get("repartition"):
             enfants_affichage.extend(e.split("/"))
         nb_personnes = len(enfants_affichage)
         places_restantes = max_par_date - nb_personnes
-
         creneaux_display.append({
             "Date": creneau['cle'].split(" | ")[0],
             "Horaire": creneau['cle'].split(" | ")[1],
             "Enfants présents": ", ".join(enfants_affichage),
             "Places restantes": places_restantes
         })
-
     df_final = pd.DataFrame(creneaux_display)
+    st.dataframe(style_repartition(df_final), use_container_width=True, hide_index=True)
 
-    def style_final(df):
-        # Couleurs et centrage
-        def color_row(row):
-            if row["Places restantes"] == 0:
-                return ["background-color: #D1FAE5"]*len(row)
-            elif row["Places restantes"] > max_par_date - min_par_date:
-                return ["background-color: #FEE2E2"]*len(row)
-            else:
-                return ["background-color: #F9F9F9"]*len(row)
-        styler = df.style.apply(color_row, axis=1)
-
-        # Alignement à gauche sauf "Places restantes"
-        colonnes_gauche = [c for c in df.columns if c != "Places restantes"]
-        styler = styler.set_properties(subset=colonnes_gauche, **{"text-align": "left"})
-        styler = styler.set_properties(subset=["Places restantes"], **{"text-align": "center"})
-        return styler
-
-    st.dataframe(
-        style_final(df_final),
-        use_container_width=True,
-        hide_index=True
-    )
-
-    # ---------------------------
     # Boutons téléchargement
-    # ---------------------------
     col_excel, col_pdf = st.columns(2)
     with col_excel:
         if st.session_state.get("output_excel"):
