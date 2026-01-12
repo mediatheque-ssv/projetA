@@ -182,7 +182,7 @@ if uploaded_file:
     with col3:
         min_occurrences = st.slider("🔢 Minimum d'occurrences par mini-b", 0, 10, min_dispos_total)
     with col4:
-        max_occurrences = st.slider("🔢 Maximum d'occurrences par mini-b", min_occurrences, 20, 6)
+        max_occurrences = st.slider("🔢 Maximum d'occurrences par mini-b", min_occurrences, 20, 5)
 
     # ---------------------------
     # Initialisation session_state
