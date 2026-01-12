@@ -108,27 +108,56 @@ if uploaded_file:
             if n in dispos_par_entite:
                 dispos_par_entite[n] += 1
 
-    st.markdown("### 🧒 Enfants et binômes détectés")
+ # ===========================
+# ENFANTS ET BINÔMES DÉTECTÉS
+# ===========================
+st.markdown("### 🧒 Enfants et binômes détectés")
 
-    if noms_uniques:
-        df_noms = pd.DataFrame(
-            {
-                "Enfant / binôme": noms_uniques,
-                "Type": ["Binôme" if "/" in nom else "Enfant seul" for nom in noms_uniques],
-                "Nombre de disponibilités": [dispos_par_entite[n] for n in noms_uniques]
-            }
-        ).sort_values("Nombre de disponibilités").reset_index(drop=True)
+if noms_uniques:
+    df_noms = pd.DataFrame(
+        {
+            "Enfant / binôme": noms_uniques,
+            "Type": ["Binôme" if "/" in nom else "Enfant seul" for nom in noms_uniques],
+            "Nombre de disponibilités": [dispos_par_entite[n] for n in noms_uniques]
+        }
+    ).sort_values("Nombre de disponibilités").reset_index(drop=True)
 
-        st.dataframe(
-            dataframe_left(df_noms, "Nombre de disponibilités"),
-            use_container_width=True,
-            hide_index=True
-        )
+    # Convertir la colonne en str pour forcer l'alignement à gauche
+    df_noms["Nombre de disponibilités"] = df_noms["Nombre de disponibilités"].astype(str)
 
-        st.info(f"🔎 {len(noms_uniques)} entité(s) détectée(s)")
-    else:
-        st.warning("Aucun enfant détecté ! Vérifie le CSV")
-        st.stop()
+    st.dataframe(
+        dataframe_left(df_noms, "Nombre de disponibilités"),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.info(f"🔎 {len(noms_uniques)} entité(s) détectée(s)")
+else:
+    st.warning("Aucun enfant détecté ! Vérifie le CSV")
+    st.stop()
+
+
+# ===========================
+# OCCURRENCES PAR ENFANT / BINÔME
+# ===========================
+if st.session_state.get("repartition"):
+    repartition = st.session_state.repartition
+    compteur = st.session_state.compteur
+
+    st.markdown("#### Occurrences par enfant / binôme")
+
+    compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
+    df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
+
+    # Convertir la colonne en str pour alignement à gauche
+    df_occ["Nombre d'occurrences"] = df_occ["Nombre d'occurrences"].astype(str)
+
+    st.dataframe(
+        dataframe_left(df_occ, "Nombre d'occurrences"),
+        use_container_width=True,
+        hide_index=True
+    )
+
     
     # ===========================
     # PARAMÈTRES CRÉNEAUX
