@@ -7,6 +7,12 @@ from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle
 
+def dataframe_left(df, colonne):
+    return df.style.set_properties(
+        subset=[colonne],
+        **{"text-align": "left"}
+    )
+
 # ===========================
 # STYLE
 # ===========================
@@ -89,18 +95,27 @@ if uploaded_file:
     })
 
     st.markdown("### 🧒 Enfants et binômes détectés")
+
     if noms_uniques:
         df_noms = pd.DataFrame(
             {
                 "Enfant / binôme": noms_uniques,
-                "Type": ["Binôme" if "/" in nom else "Enfant seul" for nom in noms_uniques]
+                "Type": ["Binôme" if "/" in nom else "Enfant seul" for nom in noms_uniques],
+                "Nombre de disponibilités": [dispos_par_entite[n] for n in noms_uniques]
             }
+        ).sort_values("Nombre de disponibilités").reset_index(drop=True)
+
+        st.dataframe(
+            dataframe_left(df_noms, "Nombre de disponibilités"),
+            use_container_width=True,
+            hide_index=True
         )
-        st.dataframe(df_noms, use_container_width=True, hide_index=True)
+
         st.info(f"🔎 {len(noms_uniques)} entité(s) détectée(s)")
     else:
         st.warning("Aucun enfant détecté ! Vérifie le CSV")
         st.stop()
+
 
     # ===========================
     # CALCUL DES DISPONIBILITÉS
@@ -134,20 +149,6 @@ if uploaded_file:
         min_occurrences = st.slider("🔢 Minimum d'occurrences par mini-b", 0, 10, min_dispos_total)
     with col4:
         max_occurrences = st.slider("🔢 Maximum d'occurrences par mini-b", min_occurrences, 20, 6)
-    
-    st.markdown("### 📊 Disponibilités par enfant / binôme")
-    df_dispos = pd.DataFrame(
-        sorted(dispos_par_entite.items(), key=lambda x: x[1]),
-        columns=["Enfant / binôme", "Nombre de disponibilités"]
-    ).reset_index(drop=True)
-    st.dataframe(
-        df_dispos.style.set_properties(
-            subset=["Nombre de disponibilités"],
-            **{"text-align": "left"}
-        ),
-        use_container_width=True,
-        hide_index=True
-    )
     
 
     # ===========================
