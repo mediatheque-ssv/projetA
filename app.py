@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import random
 import io
+import base64
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
@@ -422,23 +423,27 @@ if st.session_state.get("repartition"):
         hide_index=True
     )
 
-    # Boutons téléchargement
+    # Boutons téléchargement avec HTML personnalisé
     col_excel, col_pdf = st.columns(2)
     
     with col_excel:
         if st.session_state.get("output_excel"):
-            st.download_button(
-                "⬇️ Télécharger le planning (Excel)",
-                data=st.session_state.output_excel.getvalue(),
-                file_name="repartition.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            b64_excel = base64.b64encode(st.session_state.output_excel.getvalue()).decode()
+            st.markdown(f"""
+            <a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64_excel}" download="repartition.xlsx" style="text-decoration:none;">
+                <button style="background-color:#107C41;color:white;padding:0.6em 1.2em;border-radius:12px;font-weight:600;font-size:1.05em;border:none;cursor:pointer;width:100%;">
+                    ⬇️ Télécharger le planning (Excel)
+                </button>
+            </a>
+            """, unsafe_allow_html=True)
     
     with col_pdf:
         if st.session_state.get("output_pdf"):
-            st.download_button(
-                "⬇️ Télécharger le planning (PDF)",
-                data=st.session_state.output_pdf.getvalue(),
-                file_name="repartition.pdf",
-                mime="application/pdf"
-            )
+            b64_pdf = base64.b64encode(st.session_state.output_pdf.getvalue()).decode()
+            st.markdown(f"""
+            <a href="data:application/pdf;base64,{b64_pdf}" download="repartition.pdf" style="text-decoration:none;">
+                <button style="background-color:#DC2626;color:white;padding:0.6em 1.2em;border-radius:12px;font-weight:600;font-size:1.05em;border:none;cursor:pointer;width:100%;">
+                    ⬇️ Télécharger le planning (PDF)
+                </button>
+            </a>
+            """, unsafe_allow_html=True)
