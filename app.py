@@ -427,18 +427,50 @@ if st.session_state.get("repartition"):
     
     with col_excel:
         if st.session_state.get("output_excel"):
+            st.markdown("""
+            <style>
+            #btn_excel button {
+                background-color: #107C41 !important;
+                color: white !important;
+                border-radius: 12px;
+                padding: 0.6em 1.2em;
+                font-size: 1.05em;
+                font-weight: 600;
+            }
+            #btn_excel button:hover {
+                background-color: #0D5C2F !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
             st.download_button(
                 "⬇️ Télécharger le planning (Excel)",
                 data=st.session_state.output_excel.getvalue(),
                 file_name="repartition.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_excel"
             )
     
     with col_pdf:
         if st.session_state.get("output_pdf"):
+            st.markdown("""
+            <style>
+            #btn_pdf button {
+                background-color: #DC2626 !important;
+                color: white !important;
+                border-radius: 12px;
+                padding: 0.6em 1.2em;
+                font-size: 1.05em;
+                font-weight: 600;
+            }
+            #btn_pdf button:hover {
+                background-color: #B91C1C !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
             st.download_button(
                 "⬇️ Télécharger le planning (PDF)",
                 data=st.session_state.output_pdf.getvalue(),
                 file_name="repartition.pdf",
-                mime="application/pdf"
+                mime="application/pdf",
+                key="btn_pdf"
             )
