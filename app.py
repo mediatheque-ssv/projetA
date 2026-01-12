@@ -154,15 +154,14 @@ if uploaded_file:
     st.markdown("### 🪄 Répartition")
     if st.button("✨ Répartir les enfants"):
 
-        # Fonction principale de répartition
+        # --- fonction principale de répartition ---
         def faire_repartition():
             compteur = {nom: 0 for nom in noms_uniques}
             affectations = {nom: [] for nom in noms_uniques}
             DELAI_MINIMUM = 6
             mois_fr = {
-                'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
-                'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
-                'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
+                'janvier':1,'février':2,'mars':3,'avril':4,'mai':5,'juin':6,'juillet':7,'août':8,
+                'septembre':9,'octobre':10,'novembre':11,'décembre':12
             }
 
             def parse_dt(row):
@@ -170,12 +169,12 @@ if uploaded_file:
                     date_str = str(row['Date']).strip().lower()
                     horaire_str = str(row['Horaires']).strip()
                     parts = date_str.split()
-                    jour = int(parts[1]) if len(parts) > 1 else 1
-                    mois_nom = parts[2] if len(parts) > 2 else 'janvier'
-                    mois = mois_fr.get(mois_nom, 1)
-                    horaire_str = horaire_str.replace('h', ':00') if 'h' in horaire_str else horaire_str
+                    jour = int(parts[1]) if len(parts)>1 else 1
+                    mois_nom = parts[2] if len(parts)>2 else 'janvier'
+                    mois = mois_fr.get(mois_nom,1)
+                    horaire_str = horaire_str.replace('h',':00') if 'h' in horaire_str else horaire_str
                     heure = int(horaire_str.split(':')[0]) if ':' in horaire_str else 0
-                    minute = int(horaire_str.split(':')[1]) if ':' in horaire_str and len(horaire_str.split(':')) > 1 else 0
+                    minute = int(horaire_str.split(':')[1]) if ':' in horaire_str and len(horaire_str.split(':'))>1 else 0
                     return pd.Timestamp(year=2026, month=mois, day=jour, hour=heure, minute=minute)
                 except:
                     return pd.to_datetime("1900-01-01 00:00")
@@ -193,9 +192,8 @@ if uploaded_file:
                 dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
                 dispos = [n for n in dispos if n in compteur]
                 cle = f"{date} | {horaire_export}"
-                creneaux_info.append({'cle': cle, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
+                creneaux_info.append({'cle': cle,'dt':row['dt'],'dispos':dispos,'affectes':[]})
 
-            # Passes multiples
             MAX_PASSES = 5
             for passe in range(MAX_PASSES):
                 amelioration = False
@@ -206,30 +204,28 @@ if uploaded_file:
                         continue
                     candidats = []
                     for n in creneau['dispos']:
-                        if n not in creneau['affectes'] and compteur[n] < max_occurrences:
+                        if n not in creneau['affectes'] and compteur[n]<max_occurrences:
                             distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
-                            if distance >= DELAI_MINIMUM:
+                            if distance>=DELAI_MINIMUM:
                                 nb_dispos = dispos_par_entite[n]
-                                bonus = -100 if nb_dispos < 5 else 0
-                                if compteur[n] < min_occurrences:
-                                    bonus -= 1000
-                                alea_compteur = random.uniform(-0.5, 0.5)
-                                alea_dispos = random.uniform(-1, 1)
+                                bonus=-100 if nb_dispos<5 else 0
+                                if compteur[n]<min_occurrences: bonus-=1000
+                                alea_compteur = random.uniform(-0.5,0.5)
+                                alea_dispos = random.uniform(-1,1)
                                 candidats.append((n, compteur[n]+bonus+alea_compteur, nb_dispos+alea_dispos))
-                    candidats.sort(key=lambda x: (x[1], x[2]))
-                    for nom, _, _ in candidats:
+                    candidats.sort(key=lambda x:(x[1],x[2]))
+                    for nom,_,_ in candidats:
                         nb_personnes_ce_nom = compter_personnes(nom)
                         if nb_personnes_affectees + nb_personnes_ce_nom <= max_par_date:
                             creneau['affectes'].append(nom)
-                            compteur[nom] += 1
+                            compteur[nom]+=1
                             affectations[nom].append(date_horaire_dt)
-                            nb_personnes_affectees += nb_personnes_ce_nom
-                            amelioration = True
-                if not amelioration:
-                    break
+                            nb_personnes_affectees+=nb_personnes_ce_nom
+                            amelioration=True
+                if not amelioration: break
             return creneaux_info, compteur
 
-        # Lancer plusieurs tentatives
+        # --- lancer plusieurs tentatives ---
         MAX_TENTATIVES = 100
         meilleure_repartition = None
         meilleur_compteur = None
@@ -239,32 +235,70 @@ if uploaded_file:
             for tentative in range(MAX_TENTATIVES):
                 creneaux_info, compteur = faire_repartition()
                 score = 0
-                for nom, count in compteur.items():
-                    if count < min_occurrences:
-                        score += (min_occurrences - count)*10
-                    if count > max_occurrences:
-                        score += (count - max_occurrences)*10
+                for nom,count in compteur.items():
+                    if count<min_occurrences: score += (min_occurrences-count)*10
+                    if count>max_occurrences: score += (count-max_occurrences)*10
                 for creneau in creneaux_info:
                     nb_p = sum(len(e.split("/")) for e in creneau['affectes'])
-                    if nb_p < min_par_date:
-                        score += (min_par_date - nb_p)*5
-                if score < meilleur_score:
+                    if nb_p<min_par_date: score += (min_par_date-nb_p)*5
+                if score<meilleur_score:
                     meilleur_score = score
                     meilleure_repartition = creneaux_info
                     meilleur_compteur = compteur
-                if score == 0:
+                if score==0:
                     st.success(f'✅ Répartition parfaite trouvée en {tentative+1} tentative(s) !')
                     break
             else:
-                if meilleur_score > 0:
-                    st.info(f"ℹ️ Meilleure répartition trouvée après {MAX_TENTATIVES} tentatives.")
+                if meilleur_score>0: st.info(f"ℹ️ Meilleure répartition trouvée après {MAX_TENTATIVES} tentatives.")
 
-        # Stockage
         st.session_state.repartition = meilleure_repartition
         st.session_state.compteur = meilleur_compteur
 
+        # ===========================
+        # GÉNÉRATION EXCEL
+        # ===========================
+        export_df = pd.DataFrame([{
+            "DATE": c['cle'].split(" | ")[0],
+            "HORAIRES": c['cle'].split(" | ")[1],
+            "NOMS DES MINI-BÉNÉVOLES": ", ".join([n for e in c['affectes'] for n in e.split("/")])
+        } for c in meilleure_repartition])
+        output_excel = io.BytesIO()
+        with pd.ExcelWriter(output_excel, engine='xlsxwriter') as writer:
+            export_df.to_excel(writer, index=False, sheet_name="Répartition")
+        output_excel.seek(0)
+        st.session_state.output_excel = output_excel
+
+        # ===========================
+        # GÉNÉRATION PDF
+        # ===========================
+        output_pdf = io.BytesIO()
+        c = canvas.Canvas(output_pdf, pagesize=A4)
+        width,height = A4
+        c.setFont("Helvetica",12)
+        data = [["DATE","HORAIRES","NOMS DES MINI-BÉNÉVOLES"]]
+        for r in meilleure_repartition:
+            data.append([r['cle'].split(" | ")[0], r['cle'].split(" | ")[1],
+                         ", ".join([n for e in r['affectes'] for n in e.split("/")])])
+        row_height = (height-100)/len(data)
+        table = Table(data,colWidths=[120,80,300], rowHeights=row_height)
+        style = TableStyle([
+            ('BACKGROUND',(0,0),(-1,0), colors.HexColor('#F2CEEF')),
+            ('TEXTCOLOR',(0,0),(-1,0),colors.black),
+            ('ALIGN',(0,0),(-1,-1),'CENTER'),
+            ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+            ('GRID',(0,0),(-1,-1),1,colors.black),
+            ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold')
+        ])
+        table.setStyle(style)
+        table.wrapOn(c,width,height)
+        table.drawOn(c,30,height-50-row_height*len(data))
+        c.showPage()
+        c.save()
+        output_pdf.seek(0)
+        st.session_state.output_pdf = output_pdf
+
 # ===========================
-# AFFICHAGE RÉPARTITION ET BOUTONS
+# BOUTONS TÉLÉCHARGEMENT
 # ===========================
 if st.session_state.get("repartition"):
     repartition = st.session_state.repartition
@@ -273,7 +307,7 @@ if st.session_state.get("repartition"):
     # Occurrences
     st.markdown("#### Occurrences par enfant / binôme")
     compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
-    df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
+    df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme","Nombre d'occurrences"])
     st.dataframe(dataframe_left(df_occ, "Nombre d'occurrences"), use_container_width=True, hide_index=True)
 
     # Répartition finale
@@ -283,36 +317,24 @@ if st.session_state.get("repartition"):
         for e in creneau['affectes']:
             enfants_affichage.extend(e.split("/"))
         nb_personnes = len(enfants_affichage)
-        st.write(f"{creneau['cle']} : {', '.join(enfants_affichage)} ({max_par_date - nb_personnes} place(s) restante(s))")
+        st.write(f"{creneau['cle']} : {', '.join(enfants_affichage)} ({max_par_date-nb_personnes} place(s) restante(s))")
 
-    # ===========================
-    # BOUTONS TÉLÉCHARGEMENT
-    # ===========================
-    st.write("Session Excel:", st.session_state.get("output_excel"))
-    st.write("Session PDF:", st.session_state.get("output_pdf"))
+    # Boutons téléchargement
     if st.session_state.get("output_excel") or st.session_state.get("output_pdf"):
-        col_excel, col_pdf = st.columns(2)
-
+        col_excel,col_pdf = st.columns(2)
         with col_excel:
-            output_excel = st.session_state.get("output_excel")
-            if output_excel:
+            if st.session_state.get("output_excel"):
                 st.download_button(
-                    label="📥 Télécharger le planning (Excel)",
-                    data=output_excel.getvalue(),
+                    "📥 Télécharger le planning (Excel)",
+                    data=st.session_state.output_excel.getvalue(),
                     file_name="repartition.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
-
         with col_pdf:
-            output_pdf = st.session_state.get("output_pdf")
-            if output_pdf:
+            if st.session_state.get("output_pdf"):
                 st.download_button(
-                    label="📥 Télécharger le planning (PDF)",
-                    data=output_pdf.getvalue(),
+                    "📥 Télécharger le planning (PDF)",
+                    data=st.session_state.output_pdf.getvalue(),
                     file_name="repartition.pdf",
                     mime="application/pdf"
                 )
-
-
-
-
