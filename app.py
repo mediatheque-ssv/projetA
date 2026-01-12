@@ -10,14 +10,14 @@ from reportlab.platypus import Table, TableStyle
 # ===========================
 # FONCTIONS
 # ===========================
+def compter_personnes(nom):
+    return len(nom.split("/"))
+
 def dataframe_left(df, colonne):
     return df.style.set_properties(
         subset=[colonne],
         **{"text-align": "left"}
     )
-
-def compter_personnes(nom):
-    return len(nom.split("/"))
 
 def dataframe_left_all(df):
     return df.style.set_properties(
@@ -25,7 +25,7 @@ def dataframe_left_all(df):
     )
 
 # ===========================
-# STYLE
+# STYLE STREAMLIT
 # ===========================
 st.markdown("""
 <style>
@@ -169,6 +169,7 @@ if uploaded_file:
     st.markdown("### 🪄 Répartition")
     if st.button("✨ Répartir les enfants"):
         with st.spinner("⏳ Calcul de la meilleure répartition…"):
+
             # Fonction principale
             def faire_repartition():
                 compteur = {nom: 0 for nom in noms_uniques}
@@ -345,19 +346,20 @@ if st.session_state.get("repartition"):
     repartition = st.session_state.repartition
     compteur = st.session_state.compteur
 
-    # Occurrences
+    # ---------------------------
+    # Occurrences par enfant / binôme
+    # ---------------------------
     st.markdown("#### Occurrences par enfant / binôme")
     compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
     df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
     df_occ["Nombre d'occurrences"] = df_occ["Nombre d'occurrences"].astype(str)
     st.dataframe(dataframe_left(df_occ, "Nombre d'occurrences"), use_container_width=True, hide_index=True)
 
-    # ===========================
-    # RÉPARTITION FINALE STYLÉE
-    # ===========================
+    # ---------------------------
+    # Répartition finale stylée
+    # ---------------------------
     st.markdown("#### Répartition finale")
     creneaux_display = []
-
     for creneau in repartition:
         enfants_affichage = []
         for e in creneau['affectes']:
@@ -374,23 +376,32 @@ if st.session_state.get("repartition"):
 
     df_final = pd.DataFrame(creneaux_display)
 
-    def style_repartition(df):
+    def style_final(df):
+        # Couleurs et centrage
         def color_row(row):
             if row["Places restantes"] == 0:
-                return ["background-color: #D1FAE5"]*len(row)  # vert clair = plein
+                return ["background-color: #D1FAE5"]*len(row)
             elif row["Places restantes"] > max_par_date - min_par_date:
-                return ["background-color: #FEE2E2"]*len(row)  # rouge clair = sous-minimum
+                return ["background-color: #FEE2E2"]*len(row)
             else:
-                return ["background-color: #F9F9F9"]*len(row)  # neutre
-        return df.style.apply(color_row, axis=1).set_properties(subset=["Places restantes"], **{"text-align": "center"})
+                return ["background-color: #F9F9F9"]*len(row)
+        styler = df.style.apply(color_row, axis=1)
+
+        # Alignement à gauche sauf "Places restantes"
+        colonnes_gauche = [c for c in df.columns if c != "Places restantes"]
+        styler = styler.set_properties(subset=colonnes_gauche, **{"text-align": "left"})
+        styler = styler.set_properties(subset=["Places restantes"], **{"text-align": "center"})
+        return styler
 
     st.dataframe(
-    dataframe_left_all(df_final),
-    use_container_width=True,
-    hide_index=True
-)
+        style_final(df_final),
+        use_container_width=True,
+        hide_index=True
+    )
 
+    # ---------------------------
     # Boutons téléchargement
+    # ---------------------------
     col_excel, col_pdf = st.columns(2)
     with col_excel:
         if st.session_state.get("output_excel"):
