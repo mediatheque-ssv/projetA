@@ -6,6 +6,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle
+from datetime import datetime
 
 # ===========================
 # STYLE
@@ -26,6 +27,58 @@ st.markdown("""
     color: white;
 }
 hr { border: none; height: 2px; background-color: #DDD6FE; margin: 1.5em 0; }
+
+/* Style pour les créneaux */
+.creneau-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    padding: 1em;
+    margin: 0.5em 0;
+    color: white;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+.creneau-horaire {
+    font-size: 1.2em;
+    font-weight: 700;
+    margin-bottom: 0.5em;
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+.creneau-noms {
+    font-size: 0.95em;
+    margin-bottom: 0.5em;
+    opacity: 0.95;
+}
+.creneau-badge {
+    display: inline-block;
+    padding: 0.3em 0.8em;
+    border-radius: 20px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+.badge-ok {
+    background-color: rgba(16, 185, 129, 0.3);
+    border: 1px solid rgba(16, 185, 129, 0.6);
+}
+.badge-warning {
+    background-color: rgba(245, 158, 11, 0.3);
+    border: 1px solid rgba(245, 158, 11, 0.6);
+}
+.badge-danger {
+    background-color: rgba(239, 68, 68, 0.3);
+    border: 1px solid rgba(239, 68, 68, 0.6);
+}
+.date-header {
+    font-size: 1.1em;
+    font-weight: 700;
+    color: #6D28D9;
+    margin-top: 1em;
+    padding: 0.5em;
+    background: #F3F4F6;
+    border-radius: 8px;
+    border-left: 4px solid #6D28D9;
+}
 </style>
 
 <h1 style="
@@ -197,7 +250,7 @@ if uploaded_file:
                 dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
                 dispos = [n for n in dispos if n in compteur]
                 cle = f"{date} | {horaire_export}"
-                creneaux_info.append({'cle': cle, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
+                creneaux_info.append({'cle': cle, 'date': date, 'horaire': horaire_export, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
 
             # Affectation en plusieurs passes pour atteindre les minimums
             MAX_PASSES = 5
@@ -292,9 +345,6 @@ if uploaded_file:
                 # Si on arrive ici, aucune répartition parfaite n'a été trouvée
                 if meilleur_score > 0:
                     st.info(f'ℹ️ Meilleure répartition trouvée après {MAX_TENTATIVES} tentatives (certaines contraintes ne peuvent pas être respectées).')
-
-        creneaux_info = meilleure_repartition
-        compteur = meilleur_compteur
 
         creneaux_info = meilleure_repartition
         compteur = meilleur_compteur
@@ -400,13 +450,58 @@ if uploaded_file:
 if st.session_state.get("repartition"):
     repartition = st.session_state.repartition
     compteur = st.session_state.compteur
+    
     st.markdown("## 🧩 Répartition finale")
+    
+    # Regrouper les créneaux par date
+    creneaux_par_date = {}
     for creneau in repartition:
-        enfants_affichage = []
-        for e in creneau['affectes']:
-            enfants_affichage.extend(e.split("/"))
-        nb_personnes = len(enfants_affichage)
-        st.write(f"{creneau['cle']} : {', '.join(enfants_affichage)} ({max_par_date - nb_personnes} place(s) restante(s))")
+        date = creneau['date']
+        if date not in creneaux_par_date:
+            creneaux_par_date[date] = []
+        creneaux_par_date[date].append(creneau)
+    
+    # Afficher chaque date dans un expander
+    for date, creneaux in creneaux_par_date.items():
+        with st.expander(f"📅 **{date}** — {len(creneaux)} créneau(x)", expanded=True):
+            # Afficher les créneaux en colonnes
+            cols = st.columns(min(len(creneaux), 3))
+            for idx, creneau in enumerate(creneaux):
+                with cols[idx % 3]:
+                    enfants_affichage = []
+                    for e in creneau['affectes']:
+                        enfants_affichage.extend(e.split("/"))
+                    nb_personnes = len(enfants_affichage)
+                    places_restantes = max_par_date - nb_personnes
+                    
+                    # Déterminer le badge de statut
+                    if places_restantes == 0:
+                        badge_class = "badge-ok"
+                        badge_text = "✅ Complet"
+                    elif places_restantes <= 2:
+                        badge_class = "badge-ok"
+                        badge_text = f"✅ {places_restantes} place(s)"
+                    elif nb_personnes < min_par_date:
+                        badge_class = "badge-danger"
+                        badge_text = f"⚠️ {places_restantes} place(s)"
+                    else:
+                        badge_class = "badge-warning"
+                        badge_text = f"⚡ {places_restantes} place(s)"
+                    
+                    # Affichage de la carte du créneau
+                    st.markdown(f"""
+                    <div class="creneau-card">
+                        <div class="creneau-horaire">
+                            🕐 {creneau['horaire']}
+                        </div>
+                        <div class="creneau-noms">
+                            👤 {', '.join(enfants_affichage) if enfants_affichage else 'Aucun'}
+                        </div>
+                        <span class="creneau-badge {badge_class}">
+                            {badge_text}
+                        </span>
+                    </div>
+                    """, unsafe_allow_html=True)
 
     # Affichage occurrences
     st.markdown("## 🔁 Occurrences par enfant / binôme")
@@ -417,14 +512,14 @@ if st.session_state.get("repartition"):
     col_excel, col_pdf = st.columns(2)
     with col_excel:
         st.download_button(
-            "Télécharger le tableau (Excel)",
+            "📥 Télécharger le tableau (Excel)",
             data=st.session_state.output_excel.getvalue(),
             file_name="repartition.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     with col_pdf:
         st.download_button(
-            "Télécharger le tableau (PDF)",
+            "📥 Télécharger le tableau (PDF)",
             data=st.session_state.output_pdf.getvalue(),
             file_name="repartition.pdf",
             mime="application/pdf"
