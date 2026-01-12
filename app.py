@@ -19,6 +19,11 @@ def dataframe_left(df, colonne):
 def compter_personnes(nom):
     return len(nom.split("/"))
 
+def dataframe_left_all(df):
+    return df.style.set_properties(
+        **{"text-align": "left"}
+    )
+
 # ===========================
 # STYLE
 # ===========================
@@ -379,8 +384,11 @@ if st.session_state.get("repartition"):
                 return ["background-color: #F9F9F9"]*len(row)  # neutre
         return df.style.apply(color_row, axis=1).set_properties(subset=["Places restantes"], **{"text-align": "center"})
 
-    st.dataframe(style_repartition(df_final), use_container_width=True, hide_index=True)
-
+    st.dataframe(
+    dataframe_left_all(df_final),
+    use_container_width=True,
+    hide_index=True
+)
 
     # Boutons téléchargement
     col_excel, col_pdf = st.columns(2)
