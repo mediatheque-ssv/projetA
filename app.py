@@ -167,7 +167,7 @@ if uploaded_file:
     # Bouton Répartition
     # ---------------------------
     st.markdown("### 🪄 Élaboration du planning")
-    if st.button("✨ Répartir les mini-b"):
+    if st.button("✨ Clic magique ✨"):
         with st.spinner("⏳ Calcul de la meilleure répartition…"):
             # Fonction principale
             def faire_repartition():
@@ -355,7 +355,7 @@ if st.session_state.get("repartition"):
     # ===========================
     # RÉPARTITION FINALE STYLÉE
     # ===========================
-    st.markdown("#### Répartition finale")
+    st.markdown("#### Planning proposé")
     creneaux_display = []
 
     for creneau in repartition:
