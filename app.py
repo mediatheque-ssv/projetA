@@ -6,7 +6,6 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle
-from datetime import datetime
 
 # ===========================
 # STYLE
@@ -27,58 +26,6 @@ st.markdown("""
     color: white;
 }
 hr { border: none; height: 2px; background-color: #DDD6FE; margin: 1.5em 0; }
-
-/* Style pour les créneaux */
-.creneau-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 12px;
-    padding: 1em;
-    margin: 0.5em 0;
-    color: white;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-.creneau-horaire {
-    font-size: 1.2em;
-    font-weight: 700;
-    margin-bottom: 0.5em;
-    display: flex;
-    align-items: center;
-    gap: 0.5em;
-}
-.creneau-noms {
-    font-size: 0.95em;
-    margin-bottom: 0.5em;
-    opacity: 0.95;
-}
-.creneau-badge {
-    display: inline-block;
-    padding: 0.3em 0.8em;
-    border-radius: 20px;
-    font-size: 0.85em;
-    font-weight: 600;
-}
-.badge-ok {
-    background-color: rgba(16, 185, 129, 0.3);
-    border: 1px solid rgba(16, 185, 129, 0.6);
-}
-.badge-warning {
-    background-color: rgba(245, 158, 11, 0.3);
-    border: 1px solid rgba(245, 158, 11, 0.6);
-}
-.badge-danger {
-    background-color: rgba(239, 68, 68, 0.3);
-    border: 1px solid rgba(239, 68, 68, 0.6);
-}
-.date-header {
-    font-size: 1.1em;
-    font-weight: 700;
-    color: #6D28D9;
-    margin-top: 1em;
-    padding: 0.5em;
-    background: #F3F4F6;
-    border-radius: 8px;
-    border-left: 4px solid #6D28D9;
-}
 </style>
 
 <h1 style="
@@ -250,7 +197,7 @@ if uploaded_file:
                 dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
                 dispos = [n for n in dispos if n in compteur]
                 cle = f"{date} | {horaire_export}"
-                creneaux_info.append({'cle': cle, 'date': date, 'horaire': horaire_export, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
+                creneaux_info.append({'cle': cle, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
 
             # Affectation en plusieurs passes pour atteindre les minimums
             MAX_PASSES = 5
@@ -345,6 +292,9 @@ if uploaded_file:
                 # Si on arrive ici, aucune répartition parfaite n'a été trouvée
                 if meilleur_score > 0:
                     st.info(f'ℹ️ Meilleure répartition trouvée après {MAX_TENTATIVES} tentatives (certaines contraintes ne peuvent pas être respectées).')
+
+        creneaux_info = meilleure_repartition
+        compteur = meilleur_compteur
 
         creneaux_info = meilleure_repartition
         compteur = meilleur_compteur
@@ -450,77 +400,13 @@ if uploaded_file:
 if st.session_state.get("repartition"):
     repartition = st.session_state.repartition
     compteur = st.session_state.compteur
-    
     st.markdown("## 🧩 Répartition finale")
-    
-    # Regrouper les créneaux par mois puis par date
-    mois_fr_inverse = {
-        'janvier': '01', 'février': '02', 'mars': '03', 'avril': '04',
-        'mai': '05', 'juin': '06', 'juillet': '07', 'août': '08',
-        'septembre': '09', 'octobre': '10', 'novembre': '11', 'décembre': '12'
-    }
-    
-    creneaux_par_mois = {}
     for creneau in repartition:
-        # Extraire le mois de la date
-        date_parts = creneau['date'].lower().split()
-        mois_nom = date_parts[2] if len(date_parts) > 2 else 'janvier'
-        mois_nom_capital = mois_nom.capitalize()
-        
-        if mois_nom_capital not in creneaux_par_mois:
-            creneaux_par_mois[mois_nom_capital] = {}
-        
-        date = creneau['date']
-        if date not in creneaux_par_mois[mois_nom_capital]:
-            creneaux_par_mois[mois_nom_capital][date] = []
-        creneaux_par_mois[mois_nom_capital][date].append(creneau)
-    
-    # Trier les mois chronologiquement
-    mois_ordre = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
-                  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
-    mois_tries = [m for m in mois_ordre if m in creneaux_par_mois]
-    
-    # Afficher en colonnes (3 mois par ligne)
-    for i in range(0, len(mois_tries), 3):
-        cols = st.columns(3)
-        for idx, mois in enumerate(mois_tries[i:i+3]):
-            with cols[idx]:
-                # Compter le nombre total de créneaux dans ce mois
-                nb_creneaux_mois = sum(len(creneaux) for creneaux in creneaux_par_mois[mois].values())
-                
-                st.markdown(f"### 📅 {mois}")
-                st.markdown(f"*{nb_creneaux_mois} créneau(x)*")
-                st.markdown("---")
-                
-                # Afficher chaque date dans un expander
-                for date, creneaux in sorted(creneaux_par_mois[mois].items()):
-                    with st.expander(f"**{date.split()[1]} {date.split()[2][:3]}** ({len(creneaux)})", expanded=False):
-                        # Créer un affichage compact
-                        for creneau in creneaux:
-                            enfants_affichage = []
-                            for e in creneau['affectes']:
-                                enfants_affichage.extend(e.split("/"))
-                            nb_personnes = len(enfants_affichage)
-                            places_restantes = max_par_date - nb_personnes
-                            
-                            # Déterminer l'icône de statut
-                            if places_restantes == 0:
-                                icone = "✅"
-                            elif nb_personnes < min_par_date:
-                                icone = "⚠️"
-                            else:
-                                icone = "🟢"
-                            
-                            # Affichage ultra-compact
-                            noms_str = ', '.join(enfants_affichage) if enfants_affichage else 'Aucun'
-                            # Version courte pour les noms si trop long
-                            if len(noms_str) > 40:
-                                noms_str = noms_str[:37] + "..."
-                            
-                            st.markdown(f"**{creneau['horaire'].split()[0]}** {icone}")
-                            st.caption(f"{noms_str} · *{places_restantes}pl*")
-                
-                st.markdown("")  # Espacement entre colonnes
+        enfants_affichage = []
+        for e in creneau['affectes']:
+            enfants_affichage.extend(e.split("/"))
+        nb_personnes = len(enfants_affichage)
+        st.write(f"{creneau['cle']} : {', '.join(enfants_affichage)} ({max_par_date - nb_personnes} place(s) restante(s))")
 
     # Affichage occurrences
     st.markdown("## 🔁 Occurrences par enfant / binôme")
@@ -531,14 +417,14 @@ if st.session_state.get("repartition"):
     col_excel, col_pdf = st.columns(2)
     with col_excel:
         st.download_button(
-            "📥 Télécharger le tableau (Excel)",
+            "Télécharger le tableau (Excel)",
             data=st.session_state.output_excel.getvalue(),
             file_name="repartition.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     with col_pdf:
         st.download_button(
-            "📥 Télécharger le tableau (PDF)",
+            "Télécharger le tableau (PDF)",
             data=st.session_state.output_pdf.getvalue(),
             file_name="repartition.pdf",
             mime="application/pdf"
