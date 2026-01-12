@@ -43,12 +43,30 @@ st.markdown("""
     color: white;
 }
 
-/* Bouton Excel vert */
 .stDownloadButton>button {
     border-radius: 12px;
     padding: 0.6em 1.2em;
     font-size: 1.05em;
     font-weight: 600;
+}
+
+/* Utiliser nth-child pour cibler les boutons */
+div.row-widget.stHorizontal > div:nth-child(1) .stDownloadButton>button {
+    background-color: #107C41;
+    color: white;
+}
+div.row-widget.stHorizontal > div:nth-child(1) .stDownloadButton>button:hover {
+    background-color: #0D5C2F;
+    color: white;
+}
+
+div.row-widget.stHorizontal > div:nth-child(2) .stDownloadButton>button {
+    background-color: #DC2626;
+    color: white;
+}
+div.row-widget.stHorizontal > div:nth-child(2) .stDownloadButton>button:hover {
+    background-color: #B91C1C;
+    color: white;
 }
 
 hr { border: none; height: 2px; background-color: #DDD6FE; margin: 1.5em 0; }
@@ -402,35 +420,7 @@ if st.session_state.get("repartition"):
         hide_index=True
     )
 
-    # Boutons téléchargement avec couleurs personnalisées
-    st.markdown("""
-        <style>
-            /* Tous les boutons de téléchargement dans cette section */
-            section[data-testid="stVerticalBlock"] > div:last-child .stDownloadButton button {
-                border-radius: 12px;
-                padding: 0.6em 1.2em;
-                font-size: 1.05em;
-                font-weight: 600;
-            }
-            /* Premier bouton (Excel) en vert */
-            section[data-testid="stVerticalBlock"] > div:last-child > div > div:first-child .stDownloadButton button {
-                background-color: #107C41 !important;
-                color: white !important;
-            }
-            section[data-testid="stVerticalBlock"] > div:last-child > div > div:first-child .stDownloadButton button:hover {
-                background-color: #0D5C2F !important;
-            }
-            /* Deuxième bouton (PDF) en rouge */
-            section[data-testid="stVerticalBlock"] > div:last-child > div > div:last-child .stDownloadButton button {
-                background-color: #DC2626 !important;
-                color: white !important;
-            }
-            section[data-testid="stVerticalBlock"] > div:last-child > div > div:last-child .stDownloadButton button:hover {
-                background-color: #B91C1C !important;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-    
+    # Boutons téléchargement
     col_excel, col_pdf = st.columns(2)
     
     with col_excel:
