@@ -154,8 +154,8 @@ if uploaded_file:
     # ===========================
     # BOUTON RÉPARTITION
     # ===========================
-    st.markdown("### 🧩 Répartition")
-    if st.button("🪄 Répartir les enfants"):
+    st.markdown("### 🪄 Répartition")
+    if st.button("✨ Répartir les enfants"):
 
         # Fonction pour effectuer une répartition complète
         def faire_repartition():
