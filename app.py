@@ -154,8 +154,8 @@ if uploaded_file:
     # ===========================
     # BOUTON RÉPARTITION
     # ===========================
-    st.markdown("### ▶️ Lancer la répartition")
-    if st.button("Répartir les enfants"):
+    st.markdown("### 🧩 Répartition")
+    if st.button("🪄 Répartir les enfants"):
 
         # Fonction pour effectuer une répartition complète
         def faire_repartition():
@@ -402,13 +402,13 @@ if st.session_state.get("repartition"):
     compteur = st.session_state.compteur
     
     # ORDRE INVERSÉ : D'abord les occurrences
-    st.markdown("#### 🔁 Occurrences par enfant / binôme")
+    st.markdown("#### Occurrences par enfant / binôme")
     compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
     df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
     st.dataframe(df_occ, use_container_width=True, hide_index=True)
     
     # Puis la répartition finale
-    st.markdown("#### 🧩 Répartition finale")
+    st.markdown("#### Répartition finale")
     for creneau in repartition:
         enfants_affichage = []
         for e in creneau['affectes']:
@@ -420,14 +420,14 @@ if st.session_state.get("repartition"):
     col_excel, col_pdf = st.columns(2)
     with col_excel:
         st.download_button(
-            "Télécharger le planning (Excel)",
+            "📥 Télécharger le planning (Excel)",
             data=st.session_state.output_excel.getvalue(),
             file_name="repartition.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     with col_pdf:
         st.download_button(
-            "Télécharger le planning (PDF)",
+            "📥 Télécharger le planning (PDF)",
             data=st.session_state.output_pdf.getvalue(),
             file_name="repartition.pdf",
             mime="application/pdf"
