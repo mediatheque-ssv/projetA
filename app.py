@@ -347,14 +347,40 @@ if st.session_state.get("repartition"):
     df_occ["Nombre d'occurrences"] = df_occ["Nombre d'occurrences"].astype(str)
     st.dataframe(dataframe_left(df_occ, "Nombre d'occurrences"), use_container_width=True, hide_index=True)
 
-    # Répartition finale
-    st.markdown("#### Répartition finale")
-    for creneau in repartition:
-        enfants_affichage = []
-        for e in creneau['affectes']:
-            enfants_affichage.extend(e.split("/"))
-        nb_personnes = len(enfants_affichage)
-        st.write(f"{creneau['cle']} : {', '.join(enfants_affichage)} ({max_par_date - nb_personnes} place(s) restante(s))")
+    # ===========================
+# RÉPARTITION FINALE STYLÉE
+# ===========================
+st.markdown("#### Répartition finale")
+creneaux_display = []
+
+for creneau in repartition:
+    enfants_affichage = []
+    for e in creneau['affectes']:
+        enfants_affichage.extend(e.split("/"))
+    nb_personnes = len(enfants_affichage)
+    places_restantes = max_par_date - nb_personnes
+
+    creneaux_display.append({
+        "Date": creneau['cle'].split(" | ")[0],
+        "Horaire": creneau['cle'].split(" | ")[1],
+        "Enfants présents": ", ".join(enfants_affichage),
+        "Places restantes": places_restantes
+    })
+
+df_final = pd.DataFrame(creneaux_display)
+
+def style_repartition(df):
+    def color_row(row):
+        if row["Places restantes"] == 0:
+            return ["background-color: #D1FAE5"]*len(row)  # vert clair = plein
+        elif row["Places restantes"] > max_par_date - min_par_date:
+            return ["background-color: #FEE2E2"]*len(row)  # rouge clair = sous-minimum
+        else:
+            return ["background-color: #F9F9F9"]*len(row)  # neutre
+    return df.style.apply(color_row, axis=1).set_properties(subset=["Places restantes"], **{"text-align": "center"})
+
+st.dataframe(style_repartition(df_final), use_container_width=True)
+
 
     # Boutons téléchargement
     col_excel, col_pdf = st.columns(2)
