@@ -83,7 +83,7 @@ hr { border: none; height: 2px; background-color: #DDD6FE; margin: 1.5em 0; }
     margin-bottom: 0.5em;
     font-variant: small-caps;
 ">
-répartition mini-bénévoles
+répartition des mini-bénévoles
 </h1>
 """, unsafe_allow_html=True)
 
