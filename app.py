@@ -427,6 +427,22 @@ if st.session_state.get("repartition"):
     
     with col_excel:
         if st.session_state.get("output_excel"):
+            st.markdown("""
+            <style>
+            #btn_excel button {
+                background-color: #107C41;
+                color: white;
+                border-radius: 12px;
+                padding: 0.6em 1.2em;
+                font-size: 1.05em;
+                font-weight: 600;
+            }
+            #btn_excel button:hover {
+                background-color: #0D5C2F;
+                color: white;
+            }
+            </style>
+            """, unsafe_allow_html=True)
             st.download_button(
                 "⬇️ Télécharger le planning (Excel)",
                 data=st.session_state.output_excel.getvalue(),
@@ -437,6 +453,22 @@ if st.session_state.get("repartition"):
     
     with col_pdf:
         if st.session_state.get("output_pdf"):
+            st.markdown("""
+            <style>
+            #btn_pdf button {
+                background-color: #DC2626;
+                color: white;
+                border-radius: 12px;
+                padding: 0.6em 1.2em;
+                font-size: 1.05em;
+                font-weight: 600;
+            }
+            #btn_pdf button:hover {
+                background-color: #B91C1C;
+                color: white;
+            }
+            </style>
+            """, unsafe_allow_html=True)
             st.download_button(
                 "⬇️ Télécharger le planning (PDF)",
                 data=st.session_state.output_pdf.getvalue(),
