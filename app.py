@@ -463,45 +463,26 @@ if st.session_state.get("repartition"):
     
     # Afficher chaque date dans un expander
     for date, creneaux in creneaux_par_date.items():
-        with st.expander(f"📅 **{date}** — {len(creneaux)} créneau(x)", expanded=True):
-            # Afficher les créneaux en colonnes
-            cols = st.columns(min(len(creneaux), 3))
-            for idx, creneau in enumerate(creneaux):
-                with cols[idx % 3]:
-                    enfants_affichage = []
-                    for e in creneau['affectes']:
-                        enfants_affichage.extend(e.split("/"))
-                    nb_personnes = len(enfants_affichage)
-                    places_restantes = max_par_date - nb_personnes
-                    
-                    # Déterminer le badge de statut
-                    if places_restantes == 0:
-                        badge_class = "badge-ok"
-                        badge_text = "✅ Complet"
-                    elif places_restantes <= 2:
-                        badge_class = "badge-ok"
-                        badge_text = f"✅ {places_restantes} place(s)"
-                    elif nb_personnes < min_par_date:
-                        badge_class = "badge-danger"
-                        badge_text = f"⚠️ {places_restantes} place(s)"
-                    else:
-                        badge_class = "badge-warning"
-                        badge_text = f"⚡ {places_restantes} place(s)"
-                    
-                    # Affichage de la carte du créneau
-                    st.markdown(f"""
-                    <div class="creneau-card">
-                        <div class="creneau-horaire">
-                            🕐 {creneau['horaire']}
-                        </div>
-                        <div class="creneau-noms">
-                            👤 {', '.join(enfants_affichage) if enfants_affichage else 'Aucun'}
-                        </div>
-                        <span class="creneau-badge {badge_class}">
-                            {badge_text}
-                        </span>
-                    </div>
-                    """, unsafe_allow_html=True)
+        with st.expander(f"📅 **{date}** — {len(creneaux)} créneau(x)", expanded=False):
+            # Créer un tableau compact
+            for creneau in creneaux:
+                enfants_affichage = []
+                for e in creneau['affectes']:
+                    enfants_affichage.extend(e.split("/"))
+                nb_personnes = len(enfants_affichage)
+                places_restantes = max_par_date - nb_personnes
+                
+                # Déterminer l'icône de statut
+                if places_restantes == 0:
+                    icone = "✅"
+                elif nb_personnes < min_par_date:
+                    icone = "⚠️"
+                else:
+                    icone = "🟢"
+                
+                # Affichage ultra-compact sur une ligne
+                noms_str = ', '.join(enfants_affichage) if enfants_affichage else 'Aucun'
+                st.markdown(f"**{creneau['horaire']}** {icone} · {noms_str} · *{places_restantes} place(s)*")
 
     # Affichage occurrences
     st.markdown("## 🔁 Occurrences par enfant / binôme")
