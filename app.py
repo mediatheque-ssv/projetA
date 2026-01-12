@@ -43,7 +43,7 @@ répartition mini-bénévoles
 # ===========================
 # IMPORT CSV
 # ===========================
-st.markdown("## 📂 Import du CSV")
+st.markdown("### 📂 Import du CSV")
 uploaded_file = st.file_uploader(
     "Importer le CSV",
     type=["csv"],
@@ -88,7 +88,7 @@ if uploaded_file:
         if n.strip()
     })
 
-    st.markdown("## 🧒 Enfants et binômes détectés")
+    st.markdown("### 🧒 Enfants et binômes détectés")
     if noms_uniques:
         df_noms = pd.DataFrame(
             {
@@ -119,7 +119,7 @@ if uploaded_file:
     # ===========================
     # PARAMÈTRES CRÉNEAUX
     # ===========================
-    st.markdown("## ⚙️ Paramètres des créneaux")
+    st.markdown("### ⚙️ Paramètres des créneaux")
     col1, col2 = st.columns(2)
     with col1:
         min_par_date = st.slider("👥 Minimum de mini-b par créneau", 1, 10, 4)
@@ -135,7 +135,7 @@ if uploaded_file:
     with col4:
         max_occurrences = st.slider("🔢 Maximum d'occurrences par mini-b", min_occurrences, 20, 6)
     
-    st.markdown("## 📊 Disponibilités par enfant / binôme")
+    st.markdown("### 📊 Disponibilités par enfant / binôme")
     df_dispos = pd.DataFrame(
         sorted(dispos_par_entite.items(), key=lambda x: x[1]),
         columns=["Enfant / binôme", "Nombre de disponibilités"]
@@ -154,7 +154,7 @@ if uploaded_file:
     # ===========================
     # BOUTON RÉPARTITION
     # ===========================
-    st.markdown("## ▶️ Lancer la répartition")
+    st.markdown("### ▶️ Lancer la répartition")
     if st.button("Répartir les enfants"):
 
         # Fonction pour effectuer une répartition complète
@@ -248,8 +248,8 @@ if uploaded_file:
             
             return creneaux_info, compteur
 
-        # Lancer jusqu'à 50 tentatives pour trouver une répartition parfaite
-        MAX_TENTATIVES = 50
+        # Lancer jusqu'à 100 tentatives pour trouver une répartition parfaite
+        MAX_TENTATIVES = 100
         meilleure_repartition = None
         meilleur_compteur = None
         meilleur_score = float('inf')  # Score de pénalité global
@@ -402,13 +402,13 @@ if st.session_state.get("repartition"):
     compteur = st.session_state.compteur
     
     # ORDRE INVERSÉ : D'abord les occurrences
-    st.markdown("## 🔁 Occurrences par enfant / binôme")
+    st.markdown("#### 🔁 Occurrences par enfant / binôme")
     compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
     df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
     st.dataframe(df_occ, use_container_width=True, hide_index=True)
     
     # Puis la répartition finale
-    st.markdown("## 🧩 Répartition finale")
+    st.markdown("#### 🧩 Répartition finale")
     for creneau in repartition:
         enfants_affichage = []
         for e in creneau['affectes']:
