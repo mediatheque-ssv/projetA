@@ -122,7 +122,7 @@ if uploaded_file:
     # ---------------------------
     st.markdown("### 🧒 Enfants et binômes détectés")
     if noms_uniques:
-        with st.spinner("⏳ Préparation du tableau…"):
+        with st.spinner("⏳ Analyse du fichier…"):
             df_noms = pd.DataFrame(
                 {
                     "Enfant / binôme": noms_uniques,
