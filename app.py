@@ -400,6 +400,14 @@ if uploaded_file:
 if st.session_state.get("repartition"):
     repartition = st.session_state.repartition
     compteur = st.session_state.compteur
+    
+    # ORDRE INVERSÉ : D'abord les occurrences
+    st.markdown("## 🔁 Occurrences par enfant / binôme")
+    compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
+    df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
+    st.dataframe(df_occ, use_container_width=True, hide_index=True)
+    
+    # Puis la répartition finale
     st.markdown("## 🧩 Répartition finale")
     for creneau in repartition:
         enfants_affichage = []
@@ -408,12 +416,7 @@ if st.session_state.get("repartition"):
         nb_personnes = len(enfants_affichage)
         st.write(f"{creneau['cle']} : {', '.join(enfants_affichage)} ({max_par_date - nb_personnes} place(s) restante(s))")
 
-    # Affichage occurrences
-    st.markdown("## 🔁 Occurrences par enfant / binôme")
-    compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
-    df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
-    st.dataframe(df_occ, use_container_width=True, hide_index=True)
-
+    # Enfin les boutons de téléchargement
     col_excel, col_pdf = st.columns(2)
     with col_excel:
         st.download_button(
