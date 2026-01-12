@@ -43,6 +43,7 @@ st.markdown("""
     color: white;
 }
 
+/* Style général des boutons download */
 .stDownloadButton>button {
     border-radius: 12px;
     padding: 0.6em 1.2em;
@@ -50,23 +51,16 @@ st.markdown("""
     font-weight: 600;
 }
 
-/* Utiliser nth-child pour cibler les boutons */
-div.row-widget.stHorizontal > div:nth-child(1) .stDownloadButton>button {
-    background-color: #107C41;
-    color: white;
-}
-div.row-widget.stHorizontal > div:nth-child(1) .stDownloadButton>button:hover {
-    background-color: #0D5C2F;
-    color: white;
+/* Bouton Excel vert */
+button[data-testid="baseButton-secondary"][kind="secondary"]:has(p:contains("Excel")) {
+    background-color: #107C41 !important;
+    color: white !important;
 }
 
-div.row-widget.stHorizontal > div:nth-child(2) .stDownloadButton>button {
-    background-color: #DC2626;
-    color: white;
-}
-div.row-widget.stHorizontal > div:nth-child(2) .stDownloadButton>button:hover {
-    background-color: #B91C1C;
-    color: white;
+/* Bouton PDF rouge */
+button[data-testid="baseButton-secondary"][kind="secondary"]:has(p:contains("PDF")) {
+    background-color: #DC2626 !important;
+    color: white !important;
 }
 
 hr { border: none; height: 2px; background-color: #DDD6FE; margin: 1.5em 0; }
@@ -429,7 +423,8 @@ if st.session_state.get("repartition"):
                 "⬇️ Télécharger le planning (Excel)",
                 data=st.session_state.output_excel.getvalue(),
                 file_name="repartition.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_excel"
             )
     
     with col_pdf:
@@ -438,5 +433,6 @@ if st.session_state.get("repartition"):
                 "⬇️ Télécharger le planning (PDF)",
                 data=st.session_state.output_pdf.getvalue(),
                 file_name="repartition.pdf",
-                mime="application/pdf"
+                mime="application/pdf",
+                key="btn_pdf"
             )
