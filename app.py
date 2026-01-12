@@ -357,6 +357,20 @@ if st.session_state.get("repartition"):
     st.dataframe(dataframe_left(df_occ, "Nombre d'occurrences"), use_container_width=True, hide_index=True)
 
     # Répartition finale stylée
+    def style_final_repartition(df):
+        def color_row(row):
+            if row["Places restantes"] == 0:
+                return ["background-color: #D1FAE5"]*len(row)
+            elif row["Places restantes"] > max_par_date - min_par_date:
+                return ["background-color: #FEE2E2"]*len(row)
+            else:
+                return ["background-color: #F9F9F9"]*len(row)
+
+        styled = df.style.apply(color_row, axis=1)
+        # Aligner uniquement la dernière colonne à gauche
+        styled = styled.set_properties(subset=["Places restantes"], **{"text-align": "left"})
+        return styled
+
     st.markdown("#### Répartition finale")
     creneaux_display = []
     for creneau in repartition:
@@ -372,7 +386,12 @@ if st.session_state.get("repartition"):
             "Places restantes": places_restantes
         })
     df_final = pd.DataFrame(creneaux_display)
-    st.dataframe(style_repartition(df_final), use_container_width=True, hide_index=True)
+    st.dataframe(
+        style_final_repartition(df_final),
+        use_container_width=True,
+        hide_index=True
+    )
+
 
     # Boutons téléchargement
     col_excel, col_pdf = st.columns(2)
