@@ -43,8 +43,8 @@ st.markdown("""
     color: white;
 }
 
-/* Bouton Excel vert */
-.stDownloadButton button:first-child {
+/* Bouton Excel vert - première colonne */
+div[data-testid="column"]:nth-of-type(1) .stDownloadButton button {
     background-color: #107C41;
     color: white;
     border-radius: 12px;
@@ -52,13 +52,13 @@ st.markdown("""
     font-size: 1.05em;
     font-weight: 600;
 }
-.stDownloadButton button:first-child:hover {
+div[data-testid="column"]:nth-of-type(1) .stDownloadButton button:hover {
     background-color: #0D5C2F;
     color: white;
 }
 
-/* Bouton PDF rouge */
-.stDownloadButton button:last-child {
+/* Bouton PDF rouge - deuxième colonne */
+div[data-testid="column"]:nth-of-type(2) .stDownloadButton button {
     background-color: #DC2626;
     color: white;
     border-radius: 12px;
@@ -66,7 +66,7 @@ st.markdown("""
     font-size: 1.05em;
     font-weight: 600;
 }
-.stDownloadButton button:last-child:hover {
+div[data-testid="column"]:nth-of-type(2) .stDownloadButton button:hover {
     background-color: #B91C1C;
     color: white;
 }
