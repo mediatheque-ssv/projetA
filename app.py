@@ -10,12 +10,6 @@ from reportlab.platypus import Table, TableStyle
 # ===========================
 # FONCTIONS
 # ===========================
-def dataframe_left(df, colonne):
-    return df.style.set_properties(
-        subset=[colonne],
-        **{"text-align": "left"}
-    )
-
 def compter_personnes(nom):
     return len(nom.split("/"))
 
@@ -68,32 +62,16 @@ uploaded_file = st.file_uploader(
     )
 )
 
-# ===========================
-# CACHE DATA
-# ===========================
-@st.cache_data
-def charger_csv(file):
-    df = pd.read_csv(file, sep=";", encoding="utf-8-sig", engine="python")
-    df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
-    return df
+noms_uniques = []
 
-@st.cache_data
-def calcul_dispos(df, separator):
-    # Vectorisé : split, explode et value_counts
-    df_dispos = df["Noms_dispos"].dropna().str.split(separator).explode().str.strip()
-    dispos_par_entite = df_dispos.value_counts().to_dict()
-    noms_uniques = sorted(dispos_par_entite.keys())
-    return noms_uniques, dispos_par_entite
-
-# ===========================
-# TRAITEMENT CSV
-# ===========================
 if uploaded_file:
     try:
-        df = charger_csv(uploaded_file)
+        df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8-sig", engine="python")
     except Exception as e:
         st.error(f"Erreur de lecture du CSV : {e}")
         st.stop()
+
+    df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
 
     if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
         st.error(
@@ -102,14 +80,33 @@ if uploaded_file:
         )
         st.stop()
 
+    # ===========================
+    # EXTRACTION DES NOMS
+    # ===========================
     sample_cell = str(df["Noms_dispos"].iloc[0]) if len(df) > 0 else ""
     separator = "," if "," in sample_cell else ";"
-
-    with st.spinner("🔄 Analyse du CSV et calcul des disponibilités…"):
-        noms_uniques, dispos_par_entite = calcul_dispos(df, separator)
+    
+    noms_uniques = sorted({
+        n.strip()
+        for cell in df["Noms_dispos"]
+        if pd.notna(cell)
+        for n in str(cell).split(separator)
+        if n.strip()
+    })
 
     # ===========================
-    # AFFICHAGE ENFANTS / BINÔMES
+    # CALCUL DES DISPONIBILITÉS
+    # ===========================
+    dispos_par_entite = {nom: 0 for nom in noms_uniques}
+    for _, row in df.iterrows():
+        dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
+        dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
+        for n in dispos:
+            if n in dispos_par_entite:
+                dispos_par_entite[n] += 1
+
+    # ===========================
+    # AFFICHAGE ENFANTS / BINÔMES (style minimal)
     # ===========================
     st.markdown("### 🧒 Enfants et binômes détectés")
     if noms_uniques:
@@ -121,8 +118,10 @@ if uploaded_file:
             }
         ).sort_values("Nombre de disponibilités").reset_index(drop=True)
 
+        # conversion en str pour un alignement correct
         df_noms["Nombre de disponibilités"] = df_noms["Nombre de disponibilités"].astype(str)
-        st.dataframe(dataframe_left(df_noms, "Nombre de disponibilités"), use_container_width=True, hide_index=True)
+
+        st.dataframe(df_noms, use_container_width=True, hide_index=True)
         st.info(f"🔎 {len(noms_uniques)} entité(s) détectée(s)")
     else:
         st.warning("Aucun enfant détecté ! Vérifie le CSV")
@@ -137,7 +136,7 @@ if uploaded_file:
         min_par_date = st.slider("👥 Minimum de mini-b par créneau", 1, 10, 4)
     with col2:
         max_par_date = st.slider("👥 Maximum de mini-b par créneau", min_par_date, 10, max(5, min_par_date))
-
+    
     min_dispos_total = min(dispos_par_entite.values()) if dispos_par_entite else 0
     col3, col4 = st.columns(2)
     with col3:
@@ -151,7 +150,7 @@ if uploaded_file:
     st.markdown("### 🪄 Répartition")
     if st.button("✨ Répartir les enfants"):
 
-        # Répartition principale (inchangée)
+        # Fonction principale de répartition
         def faire_repartition():
             compteur = {nom: 0 for nom in noms_uniques}
             affectations = {nom: [] for nom in noms_uniques}
@@ -192,8 +191,9 @@ if uploaded_file:
                 cle = f"{date} | {horaire_export}"
                 creneaux_info.append({'cle': cle, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
 
+            # Passes multiples
             MAX_PASSES = 5
-            for passe in range(MAX_PASSES := 5):
+            for passe in range(MAX_PASSES):
                 amelioration = False
                 for creneau in creneaux_info:
                     date_horaire_dt = creneau['dt']
@@ -225,6 +225,7 @@ if uploaded_file:
                     break
             return creneaux_info, compteur
 
+        # Lancer plusieurs tentatives
         MAX_TENTATIVES = 100
         meilleure_repartition = None
         meilleur_compteur = None
@@ -254,6 +255,7 @@ if uploaded_file:
                 if meilleur_score > 0:
                     st.info(f"ℹ️ Meilleure répartition trouvée après {MAX_TENTATIVES} tentatives.")
 
+        # Stockage
         st.session_state.repartition = meilleure_repartition
         st.session_state.compteur = meilleur_compteur
 
@@ -262,11 +264,11 @@ if uploaded_file:
         # ===========================
         export_df = pd.DataFrame([
             {
-                "DATE": creneau['cle'].split(" | ")[0],
-                "HORAIRES": creneau['cle'].split(" | ")[1],
-                "NOMS DES MINI-BÉNÉVOLES": ", ".join([n for e in creneau['affectes'] for n in e.split("/")])
+                "DATE": c['cle'].split(" | ")[0],
+                "HORAIRES": c['cle'].split(" | ")[1],
+                "NOMS DES MINI-BÉNÉVOLES": ", ".join([n for e in c['affectes'] for n in e.split("/")])
             }
-            for creneau in meilleure_repartition
+            for c in st.session_state.repartition
         ])
         output_excel = io.BytesIO()
         with pd.ExcelWriter(output_excel, engine='xlsxwriter') as writer:
@@ -294,10 +296,9 @@ if uploaded_file:
         width, height = A4
         c.setFont("Helvetica", 12)
         data = [["DATE", "HORAIRES", "NOMS DES MINI-BÉNÉVOLES"]]
-        for r in meilleure_repartition:
+        for r in st.session_state.repartition:
             data.append([r['cle'].split(" | ")[0], r['cle'].split(" | ")[1],
                          ", ".join([n for e in r['affectes'] for n in e.split("/")])])
-        # Hauteur adaptable
         available_height = height - 100
         row_height = available_height / len(data)
         table = Table(data, colWidths=[120, 80, 300], rowHeights=row_height)
@@ -327,19 +328,17 @@ if st.session_state.get("repartition"):
     st.markdown("#### Occurrences par enfant / binôme")
     compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
     df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
-    st.dataframe(dataframe_left(df_occ, "Nombre d'occurrences"), use_container_width=True, hide_index=True)
+    st.dataframe(df_occ, use_container_width=True, hide_index=True)
 
     st.markdown("#### Répartition finale")
-    for creneau in repartition:
+    for c in repartition:
         enfants_affichage = []
-        for e in creneau['affectes']:
+        for e in c['affectes']:
             enfants_affichage.extend(e.split("/"))
         nb_personnes = len(enfants_affichage)
-        st.write(f"{creneau['cle']} : {', '.join(enfants_affichage)} ({max_par_date - nb_personnes} place(s) restante(s))")
+        st.write(f"{c['cle']} : {', '.join(enfants_affichage)} ({max_par_date - nb_personnes} place(s) restante(s))")
 
-    # ===========================
-    # BOUTONS TÉLÉCHARGEMENT
-    # ===========================
+    # Boutons téléchargement
     col_excel, col_pdf = st.columns(2)
     with col_excel:
         output_excel = st.session_state.get("output_excel")
