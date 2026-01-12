@@ -140,7 +140,15 @@ if uploaded_file:
         sorted(dispos_par_entite.items(), key=lambda x: x[1]),
         columns=["Enfant / binôme", "Nombre de disponibilités"]
     ).reset_index(drop=True)
-    st.dataframe(df_dispos, use_container_width=True, hide_index=True)
+    st.dataframe(
+        df_dispos.style.set_properties(
+            subset=["Nombre de disponibilités"],
+            **{"text-align": "left"}
+        ),
+        use_container_width=True,
+        hide_index=True
+    )
+    
 
     # ===========================
     # INITIALISATION session_state
@@ -405,7 +413,15 @@ if st.session_state.get("repartition"):
     st.markdown("#### Occurrences par enfant / binôme")
     compteur_sorted = dict(sorted(compteur.items(), key=lambda x: x[1]))
     df_occ = pd.DataFrame(compteur_sorted.items(), columns=["Enfant / binôme", "Nombre d'occurrences"])
-    st.dataframe(df_occ, use_container_width=True, hide_index=True)
+    st.dataframe(
+        df_occ.style.set_properties(
+            subset=["Nombre d'occurrences"],
+            **{"text-align": "left"}
+        ),
+        use_container_width=True,
+        hide_index=True
+    )
+
     
     # Puis la répartition finale
     st.markdown("#### Répartition finale")
