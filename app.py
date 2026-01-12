@@ -43,8 +43,8 @@ st.markdown("""
     color: white;
 }
 
-/* Boutons de téléchargement colorés */
-[data-testid="stDownloadButton"] button[kind="secondary"] {
+/* Bouton Excel vert */
+.stDownloadButton>button {
     border-radius: 12px;
     padding: 0.6em 1.2em;
     font-size: 1.05em;
@@ -404,18 +404,21 @@ if st.session_state.get("repartition"):
 
     # Boutons téléchargement avec couleurs personnalisées
     col_excel, col_pdf = st.columns(2)
+    
     with col_excel:
         if st.session_state.get("output_excel"):
+            # Style spécifique pour le bouton Excel
             st.markdown("""
-            <style>
-            div[data-testid="column"]:nth-of-type(1) button {
-                background-color: #107C41 !important;
-                color: white !important;
-            }
-            div[data-testid="column"]:nth-of-type(1) button:hover {
-                background-color: #0D5C2F !important;
-            }
-            </style>
+                <style>
+                    div[data-testid="column"]:first-child .stDownloadButton>button {
+                        background-color: #107C41;
+                        color: white;
+                    }
+                    div[data-testid="column"]:first-child .stDownloadButton>button:hover {
+                        background-color: #0D5C2F;
+                        color: white;
+                    }
+                </style>
             """, unsafe_allow_html=True)
             st.download_button(
                 "⬇️ Télécharger le planning (Excel)",
@@ -423,18 +426,21 @@ if st.session_state.get("repartition"):
                 file_name="repartition.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+    
     with col_pdf:
         if st.session_state.get("output_pdf"):
+            # Style spécifique pour le bouton PDF
             st.markdown("""
-            <style>
-            div[data-testid="column"]:nth-of-type(2) button {
-                background-color: #DC2626 !important;
-                color: white !important;
-            }
-            div[data-testid="column"]:nth-of-type(2) button:hover {
-                background-color: #B91C1C !important;
-            }
-            </style>
+                <style>
+                    div[data-testid="column"]:last-child .stDownloadButton>button {
+                        background-color: #DC2626;
+                        color: white;
+                    }
+                    div[data-testid="column"]:last-child .stDownloadButton>button:hover {
+                        background-color: #B91C1C;
+                        color: white;
+                    }
+                </style>
             """, unsafe_allow_html=True)
             st.download_button(
                 "⬇️ Télécharger le planning (PDF)",
