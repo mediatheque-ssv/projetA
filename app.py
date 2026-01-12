@@ -94,6 +94,20 @@ if uploaded_file:
         if n.strip()
     })
 
+      # ===========================
+    # CALCUL DES DISPONIBILITÉS
+    # ===========================
+    def compter_personnes(nom):
+        return len(nom.split("/"))
+    
+    dispos_par_entite = {nom: 0 for nom in noms_uniques}
+    for _, row in df.iterrows():
+        dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
+        dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
+        for n in dispos:
+            if n in dispos_par_entite:
+                dispos_par_entite[n] += 1
+
     st.markdown("### 🧒 Enfants et binômes détectés")
 
     if noms_uniques:
@@ -115,21 +129,6 @@ if uploaded_file:
     else:
         st.warning("Aucun enfant détecté ! Vérifie le CSV")
         st.stop()
-
-
-    # ===========================
-    # CALCUL DES DISPONIBILITÉS
-    # ===========================
-    def compter_personnes(nom):
-        return len(nom.split("/"))
-    
-    dispos_par_entite = {nom: 0 for nom in noms_uniques}
-    for _, row in df.iterrows():
-        dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
-        dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
-        for n in dispos:
-            if n in dispos_par_entite:
-                dispos_par_entite[n] += 1
     
     # ===========================
     # PARAMÈTRES CRÉNEAUX
