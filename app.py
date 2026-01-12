@@ -285,29 +285,32 @@ if st.session_state.get("repartition"):
         nb_personnes = len(enfants_affichage)
         st.write(f"{creneau['cle']} : {', '.join(enfants_affichage)} ({max_par_date - nb_personnes} place(s) restante(s))")
 
-    # Boutons téléchargement
-    # Boutons téléchargement
-    col_excel, col_pdf = st.columns(2)
+    # ===========================
+    # BOUTONS TÉLÉCHARGEMENT
+    # ===========================
+    if st.session_state.get("output_excel") or st.session_state.get("output_pdf"):
+        col_excel, col_pdf = st.columns(2)
 
-    with col_excel:
-        output_excel = st.session_state.get("output_excel")
-        if output_excel is not None:
-            st.download_button(
-                label="📥 Télécharger le planning (Excel)",
-                data=output_excel.getvalue(),
-                file_name="repartition.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        with col_excel:
+            output_excel = st.session_state.get("output_excel")
+            if output_excel:
+                st.download_button(
+                    label="📥 Télécharger le planning (Excel)",
+                    data=output_excel.getvalue(),
+                    file_name="repartition.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
-    with col_pdf:
-        output_pdf = st.session_state.get("output_pdf")
-        if output_pdf is not None:
-            st.download_button(
-                label="📥 Télécharger le planning (PDF)",
-                data=output_pdf.getvalue(),
-                file_name="repartition.pdf",
-                mime="application/pdf"
-            )
+        with col_pdf:
+            output_pdf = st.session_state.get("output_pdf")
+            if output_pdf:
+                st.download_button(
+                    label="📥 Télécharger le planning (PDF)",
+                    data=output_pdf.getvalue(),
+                    file_name="repartition.pdf",
+                    mime="application/pdf"
+                )
+
 
 
 
