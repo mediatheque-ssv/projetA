@@ -43,24 +43,32 @@ st.markdown("""
     color: white;
 }
 
-/* Style général des boutons download */
-.stDownloadButton>button {
+/* Bouton Excel vert */
+.stDownloadButton button:first-child {
+    background-color: #107C41;
+    color: white;
     border-radius: 12px;
     padding: 0.6em 1.2em;
     font-size: 1.05em;
     font-weight: 600;
 }
-
-/* Bouton Excel vert */
-button[data-testid="baseButton-secondary"][kind="secondary"]:has(p:contains("Excel")) {
-    background-color: #107C41 !important;
-    color: white !important;
+.stDownloadButton button:first-child:hover {
+    background-color: #0D5C2F;
+    color: white;
 }
 
 /* Bouton PDF rouge */
-button[data-testid="baseButton-secondary"][kind="secondary"]:has(p:contains("PDF")) {
-    background-color: #DC2626 !important;
-    color: white !important;
+.stDownloadButton button:last-child {
+    background-color: #DC2626;
+    color: white;
+    border-radius: 12px;
+    padding: 0.6em 1.2em;
+    font-size: 1.05em;
+    font-weight: 600;
+}
+.stDownloadButton button:last-child:hover {
+    background-color: #B91C1C;
+    color: white;
 }
 
 hr { border: none; height: 2px; background-color: #DDD6FE; margin: 1.5em 0; }
