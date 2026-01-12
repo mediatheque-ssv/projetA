@@ -42,6 +42,25 @@ st.markdown("""
     background-color: #5B21B6;
     color: white;
 }
+
+/* Bouton Excel vert */
+.stDownloadButton:has(button:contains("Excel")) button {
+    background-color: #107C41 !important;
+    color: white !important;
+}
+.stDownloadButton:has(button:contains("Excel")) button:hover {
+    background-color: #0D5C2F !important;
+}
+
+/* Bouton PDF rouge */
+.stDownloadButton:has(button:contains("PDF")) button {
+    background-color: #DC2626 !important;
+    color: white !important;
+}
+.stDownloadButton:has(button:contains("PDF")) button:hover {
+    background-color: #B91C1C !important;
+}
+
 hr { border: none; height: 2px; background-color: #DDD6FE; margin: 1.5em 0; }
 </style>
 
@@ -369,7 +388,7 @@ if st.session_state.get("repartition"):
             "Date": creneau['cle'].split(" | ")[0],
             "Horaire": creneau['cle'].split(" | ")[1],
             "Enfants présents": ", ".join(enfants_affichage),
-            "Places restantes": str(places_restantes)  # ← IMPORTANT
+            "Places restantes": str(places_restantes)
         })
 
     df_final = pd.DataFrame(creneaux_display)
