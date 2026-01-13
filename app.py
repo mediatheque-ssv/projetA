@@ -8,6 +8,11 @@ from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle
 
+st.set_page_config(
+    page_title="Mini-b",
+    page_icon="favicon_minib.png"  # ou emoji, ou une URL
+)
+
 # ===========================
 # FONCTIONS
 # ===========================
