@@ -99,7 +99,8 @@ uploaded_file = st.file_uploader(
         "• Chaque nom de bénévole doit être séparé par un point-virgule (Nom1;Nom2;Nom3).  \n"
         "• Pour indiquer un binôme, mettre un slash entre les deux noms (Nom1/Nom2).  \n"
         "• Ne pas noter une personne comme disponible sur un créneau si son binôme n'est pas disponible sur ce même créneau.  \n"
-        "• Attention à toujours orthographier les noms de la même manière."
+        "• Attention à toujours orthographier les noms de la même manière.  \n"
+        "• Le CSV doit être enregistré au format 'CSV UTF-8 (délimité par des virgules) (*.csv)'."
     )
 )
 
