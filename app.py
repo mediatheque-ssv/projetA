@@ -202,7 +202,7 @@ if uploaded_file:
     # ---------------------------
     # Bouton Répartition
     # ---------------------------
-    st.markdown("### 🪄 Élaboration du planning")
+    st.markdown("### 🧙‍♀️ Élaboration du planning")
     if st.button("✨ Clic magique ✨"):
         with st.spinner("⏳ Calcul de la meilleure répartition…"):
             # Fonction principale
