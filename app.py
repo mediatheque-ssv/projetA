@@ -10,7 +10,7 @@ from reportlab.platypus import Table, TableStyle
 
 st.set_page_config(
     page_title="Mini-b",
-    page_icon="favicon_minib.png"
+    page_icon="favicon_minib.png"  # ou emoji, ou une URL
 )
 
 # ===========================
@@ -209,8 +209,7 @@ if uploaded_file:
             def faire_repartition():
                 compteur = {nom: 0 for nom in noms_uniques}
                 affectations = {nom: [] for nom in noms_uniques}
-                DELAI_MINIMUM = 3  # réduit de 6 à 3 jours
-                FENETRE_FUTUR = 14  # jours à regarder en avant pour la pénalité de rareté
+                DELAI_MINIMUM = 6
                 mois_fr = {
                     'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
                     'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
@@ -265,30 +264,9 @@ if uploaded_file:
                                     bonus = -100 if nb_dispos < 5 else 0
                                     if compteur[n] < min_occurrences:
                                         bonus -= 1000
-
-                                    # --- NOUVEAU : pénalité si la personne est rare sur un créneau futur proche ---
-                                    penalite_futur = 0
-                                    for futur in creneaux_info:
-                                        if futur['dt'] <= date_horaire_dt:
-                                            continue
-                                        delta_jours = (futur['dt'] - date_horaire_dt).days
-                                        if delta_jours > FENETRE_FUTUR:
-                                            continue
-                                        # Nombre de dispos encore éligibles sur ce créneau futur
-                                        # (qui respectent le délai min depuis maintenant)
-                                        dispos_futur_eligibles = [
-                                            x for x in futur['dispos']
-                                            if x not in futur['affectes']
-                                            and (futur['dt'] - date_horaire_dt).days >= DELAI_MINIMUM
-                                        ]
-                                        if n in futur['dispos'] and len(dispos_futur_eligibles) <= min_par_date + 1:
-                                            # Le créneau futur est tendu et cette personne y est précieuse
-                                            penalite_futur += (min_par_date + 2 - len(dispos_futur_eligibles)) * 50
-                                    # --------------------------------------------------------------------------
-
                                     alea_compteur = random.uniform(-0.5, 0.5)
                                     alea_dispos = random.uniform(-1, 1)
-                                    candidats.append((n, compteur[n] + bonus + alea_compteur + penalite_futur, nb_dispos + alea_dispos))
+                                    candidats.append((n, compteur[n]+bonus+alea_compteur, nb_dispos+alea_dispos))
                         candidats.sort(key=lambda x: (x[1], x[2]))
                         for nom, _, _ in candidats:
                             nb_personnes_ce_nom = compter_personnes(nom)
