@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import random
+import re
 import io
 import base64
 from reportlab.lib.pagesizes import A4
@@ -29,6 +30,69 @@ def dataframe_left_all(df):
     return df.style.set_properties(
         **{"text-align": "left"}
     )
+
+MOIS_FR = {
+    'janvier': 1, 'février': 2, 'fevrier': 2, 'mars': 3, 'avril': 4,
+    'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8, 'aout': 8,
+    'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12, 'decembre': 12
+}
+
+def decouper_cellule(cell, separator):
+    """'Adrien;Maha+Isha;Lise/Cléo' -> (['Adrien', 'Maha', 'Isha', 'Lise/Cléo'], [['Maha', 'Isha']])
+    Le '/' (binôme obligatoire) reste collé ; le '+' (préférence) sépare les enfants
+    mais retient qu'ils aimeraient être ensemble. Les doublons sont ignorés."""
+    noms, groupes = [], []
+    if pd.isna(cell):
+        return noms, groupes
+    for morceau in str(cell).split(separator):
+        parts = [p.strip() for p in morceau.split("+") if p.strip()]
+        noms.extend(parts)
+        if len(parts) > 1:
+            groupes.append(parts)
+    return list(dict.fromkeys(noms)), groupes
+
+def lire_jour_mois(date_str):
+    """'mercredi 14 octobre' -> (14, 10). Renvoie None si illisible."""
+    m = re.search(r"(\d{1,2})\s+([a-zàâäéèêëîïôöûüç]+)", str(date_str).strip().lower())
+    if not m or m.group(2) not in MOIS_FR:
+        return None
+    return int(m.group(1)), MOIS_FR[m.group(2)]
+
+def lire_heure(horaire_str):
+    """'10h', '10h30', '10:00' ou '10h - 11h' -> (10, 0) : on garde l'heure de début."""
+    m = re.search(r"(\d{1,2})\s*[h:]\s*(\d{2})?", str(horaire_str).lower())
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2) or 0)
+
+def ajouter_dates(df):
+    """Ajoute une colonne 'dt' avec la vraie date de chaque créneau.
+    L'année est déduite automatiquement : chaque date est placée au plus près
+    de la précédente (le 1er créneau au plus près d'aujourd'hui), donc le passage
+    décembre -> janvier bascule bien sur l'année suivante."""
+    reference = pd.Timestamp.today().normalize()
+    dts, erreurs = [], []
+    for i, row in df.iterrows():
+        jm = lire_jour_mois(row["Date"])
+        hm = lire_heure(row["Horaires"])
+        candidats = []
+        if jm and hm:
+            (jour, mois), (heure, minute) = jm, hm
+            for annee in (reference.year - 1, reference.year, reference.year + 1):
+                try:
+                    candidats.append(pd.Timestamp(year=annee, month=mois, day=jour, hour=heure, minute=minute))
+                except ValueError:
+                    pass
+        if not candidats:
+            dts.append(pd.NaT)
+            erreurs.append(f"Ligne {i + 2} : « {row['Date']} » / « {row['Horaires']} »")
+            continue
+        dt = min(candidats, key=lambda d: abs(d - reference))
+        dts.append(dt)
+        reference = dt
+    df = df.copy()
+    df["dt"] = dts
+    return df, erreurs
 
 # ===========================
 # STYLE
@@ -81,10 +145,10 @@ hr { border: none; height: 2px; background-color: #DDD6FE; margin: 1.5em 0; }
 </style>
 
 <h1 style="
-    color: #6D28D9; 
-    font-size: 2.5em; 
-    font-weight: 800; 
-    text-align: center; 
+    color: #6D28D9;
+    font-size: 2.5em;
+    font-weight: 800;
+    text-align: center;
     margin-bottom: 0.5em;
     font-variant: small-caps;
 ">
@@ -101,9 +165,14 @@ uploaded_file = st.file_uploader(
     type=["csv"],
     help=(
         "• Le CSV doit contenir exactement les colonnes : 'Date', 'Horaires' et 'Noms_dispos'.  \n"
+        "• Les dates s'écrivent sans l'année : 'mercredi 14 octobre'.  \n"
+        "• Les horaires peuvent s'écrire '10h', '10h30' ou '10h - 11h' : seule l'heure de début est prise en compte.  \n"
         "• Chaque nom de bénévole doit être séparé par un point-virgule (Nom1;Nom2;Nom3).  \n"
-        "• Pour indiquer un binôme, mettre un slash entre les deux noms (Nom1/Nom2).  \n"
+        "• Binôme OBLIGATOIRE : mettre un slash entre les deux noms (Nom1/Nom2). Ils seront toujours placés ensemble.  \n"
         "• Ne pas noter une personne comme disponible sur un créneau si son binôme n'est pas disponible sur ce même créneau.  \n"
+        "• Préférence (non obligatoire) : mettre un plus entre les noms (Nom1+Nom2). L'appli essaiera de les placer ensemble, "
+        "sans que ce soit au détriment de l'équité, et pourra aussi les placer séparément. "
+        "Il suffit de l'indiquer sur un seul créneau pour que ça compte sur toute la période.  \n"
         "• Attention à toujours orthographier les noms de la même manière.  \n"
         "• Le CSV doit être enregistré au format 'CSV UTF-8 (délimité par des virgules) (*.csv)'."
     )
@@ -122,7 +191,7 @@ if uploaded_file:
             st.error(f"Erreur de lecture du CSV : {e}")
             st.stop()
 
-        df.columns = [c.replace("\ufeff", "").strip() for c in df.columns]
+        df.columns = [c.replace("﻿", "").strip() for c in df.columns]
 
         if not set(["Date", "Horaires", "Noms_dispos"]).issubset(set(df.columns)):
             st.error(
@@ -131,27 +200,47 @@ if uploaded_file:
             )
             st.stop()
 
+        # Supprime les lignes vides (ex. ';;' en fin de fichier)
+        df = df.dropna(subset=["Date"])
+        df = df[df["Date"].astype(str).str.strip() != ""]
+        if df.empty:
+            st.error("Le CSV ne contient aucun créneau.")
+            st.stop()
+
+        # Lecture des dates une seule fois, avec arrêt clair si une ligne est illisible
+        df, erreurs_dates = ajouter_dates(df)
+        if erreurs_dates:
+            st.error(
+                "Certaines dates ou horaires sont illisibles. Corrige ces lignes du CSV :\n\n"
+                + "\n".join(f"- {e}" for e in erreurs_dates)
+            )
+            st.stop()
+        df = df.sort_values("dt", kind="stable")
+
         sample_cell = str(df["Noms_dispos"].iloc[0]) if len(df) > 0 else ""
         separator = "," if "," in sample_cell else ";"
         noms_uniques = sorted({
-            n.strip()
+            n
             for cell in df["Noms_dispos"]
-            if pd.notna(cell)
-            for n in str(cell).split(separator)
-            if n.strip()
+            for n in decouper_cellule(cell, separator)[0]
         })
+
+        # Préférences non obligatoires (Nom1+Nom2), valables sur toute la période
+        partenaires = {}
+        for cell in df["Noms_dispos"]:
+            for groupe in decouper_cellule(cell, separator)[1]:
+                for a in groupe:
+                    partenaires.setdefault(a, set()).update(b for b in groupe if b != a)
+        paires_pref = sorted({tuple(sorted((a, b))) for a in partenaires for b in partenaires[a]})
 
     # ---------------------------
     # Calcul disponibilités
     # ---------------------------
     with st.spinner("⏳ Calcul des disponibilités…"):
         dispos_par_entite = {nom: 0 for nom in noms_uniques}
-        for _, row in df.iterrows():
-            dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
-            dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
-            for n in dispos:
-                if n in dispos_par_entite:
-                    dispos_par_entite[n] += 1
+        for cell in df["Noms_dispos"]:
+            for n in decouper_cellule(cell, separator)[0]:
+                dispos_par_entite[n] += 1
 
     # ---------------------------
     # Affichage enfants / binômes
@@ -169,6 +258,8 @@ if uploaded_file:
             df_noms["Nombre de disponibilités"] = df_noms["Nombre de disponibilités"].astype(str)
             st.dataframe(dataframe_left(df_noms, "Nombre de disponibilités"), use_container_width=True, hide_index=True)
             st.info(f"🔎 {len(noms_uniques)} entité(s) détectée(s)")
+            if paires_pref:
+                st.info("🤝 Préférences détectées (non obligatoires) : " + " · ".join(f"{a} + {b}" for a, b in paires_pref))
     else:
         st.warning("Aucun enfant détecté ! Vérifie le CSV")
         st.stop()
@@ -182,7 +273,7 @@ if uploaded_file:
         min_par_date = st.slider("👥 Minimum de mini-b par créneau", 1, 10, 4)
     with col2:
         max_par_date = st.slider("👥 Maximum de mini-b par créneau", min_par_date, 10, max(5, min_par_date))
-    
+
     min_dispos_total = min(dispos_par_entite.values()) if dispos_par_entite else 0
     col3, col4 = st.columns(2)
     with col3:
@@ -210,39 +301,14 @@ if uploaded_file:
                 compteur = {nom: 0 for nom in noms_uniques}
                 affectations = {nom: [] for nom in noms_uniques}
                 DELAI_MINIMUM = 6
-                mois_fr = {
-                    'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
-                    'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
-                    'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
-                }
-
-                def parse_dt(row):
-                    try:
-                        date_str = str(row['Date']).strip().lower()
-                        horaire_str = str(row['Horaires']).strip()
-                        parts = date_str.split()
-                        jour = int(parts[1]) if len(parts) > 1 else 1
-                        mois_nom = parts[2] if len(parts) > 2 else 'janvier'
-                        mois = mois_fr.get(mois_nom, 1)
-                        horaire_str = horaire_str.replace('h', ':00') if 'h' in horaire_str else horaire_str
-                        heure = int(horaire_str.split(':')[0]) if ':' in horaire_str else 0
-                        minute = int(horaire_str.split(':')[1]) if ':' in horaire_str and len(horaire_str.split(':')) > 1 else 0
-                        return pd.Timestamp(year=2026, month=mois, day=jour, hour=heure, minute=minute)
-                    except:
-                        return pd.to_datetime("1900-01-01 00:00")
-
-                df_sorted = df.copy()
-                df_sorted['dt'] = df_sorted.apply(parse_dt, axis=1)
-                df_sorted = df_sorted.sort_values("dt")
+                BONUS_PREF = 1.5
 
                 creneaux_info = []
-                for _, row in df_sorted.iterrows():
-                    date = str(row["Date"]).strip() or "1900-01-01"
-                    horaire = str(row["Horaires"]).strip() or "00:00"
+                for _, row in df.iterrows():
+                    date = str(row["Date"]).strip()
+                    horaire = str(row["Horaires"]).strip()
                     horaire_export = "10h - 11h" if horaire.startswith("10") else "15h - 16h" if horaire.startswith("15") else horaire
-                    dispos_raw = str(row["Noms_dispos"]) if pd.notna(row["Noms_dispos"]) else ""
-                    dispos = [n.strip() for n in dispos_raw.split(separator) if n.strip()]
-                    dispos = [n for n in dispos if n in compteur]
+                    dispos = [n for n in decouper_cellule(row["Noms_dispos"], separator)[0] if n in compteur]
                     cle = f"{date} | {horaire_export}"
                     creneaux_info.append({'cle': cle, 'dt': row['dt'], 'dispos': dispos, 'affectes': []})
 
@@ -258,7 +324,7 @@ if uploaded_file:
                         candidats = []
                         for n in creneau['dispos']:
                             if n not in creneau['affectes'] and compteur[n] < max_occurrences:
-                                distance = min([(date_horaire_dt - d).days for d in affectations[n]] + [float('inf')])
+                                distance = min([abs((date_horaire_dt - d).days) for d in affectations[n]] + [float('inf')])
                                 if distance >= DELAI_MINIMUM:
                                     nb_dispos = dispos_par_entite[n]
                                     bonus = -100 if nb_dispos < 5 else 0
@@ -267,8 +333,17 @@ if uploaded_file:
                                     alea_compteur = random.uniform(-0.5, 0.5)
                                     alea_dispos = random.uniform(-1, 1)
                                     candidats.append((n, compteur[n]+bonus+alea_compteur, nb_dispos+alea_dispos))
-                        candidats.sort(key=lambda x: (x[1], x[2]))
-                        for nom, _, _ in candidats:
+                        # Placement un par un : après chaque placement, les "préférés" (Nom1+Nom2)
+                        # des enfants déjà présents gagnent un petit bonus (BONUS_PREF).
+                        # Ce bonus ne fait jamais passer quelqu'un devant un enfant prioritaire
+                        # (peu dispo ou sous le minimum d'occurrences) : l'équité reste prioritaire.
+                        while candidats:
+                            presents = set(creneau['affectes'])
+                            candidats.sort(key=lambda x: (
+                                x[1] - (BONUS_PREF if partenaires.get(x[0], set()) & presents else 0),
+                                x[2]
+                            ))
+                            nom, _, _ = candidats.pop(0)
                             nb_personnes_ce_nom = compter_personnes(nom)
                             if nb_personnes_affectees + nb_personnes_ce_nom <= max_par_date:
                                 creneau['affectes'].append(nom)
@@ -298,6 +373,12 @@ if uploaded_file:
                     nb_p = sum(len(e.split("/")) for e in creneau['affectes'])
                     if nb_p < min_par_date:
                         score += (min_par_date - nb_p)*5
+                    # Petite pénalité (la plus faible) quand un duo préféré est séparé
+                    # alors que les deux étaient dispo sur ce créneau
+                    for a, b in paires_pref:
+                        if a in creneau['dispos'] and b in creneau['dispos'] \
+                                and (a in creneau['affectes']) != (b in creneau['affectes']):
+                            score += 1
                 if score < meilleur_score:
                     meilleur_score = score
                     meilleure_repartition = creneaux_info
@@ -312,6 +393,10 @@ if uploaded_file:
             # Stockage
             st.session_state.repartition = meilleure_repartition
             st.session_state.compteur = meilleur_compteur
+            st.session_state.duos = {
+                f"{a} + {b}": sum(1 for cr in meilleure_repartition if a in cr['affectes'] and b in cr['affectes'])
+                for a, b in paires_pref
+            }
 
             # ===========================
             # Export Excel
@@ -388,6 +473,11 @@ if st.session_state.get("repartition"):
     df_occ["Nombre d'occurrences"] = df_occ["Nombre d'occurrences"].astype(str)
     st.dataframe(dataframe_left(df_occ, "Nombre d'occurrences"), use_container_width=True, hide_index=True)
 
+    if st.session_state.get("duos"):
+        st.info("🤝 Duos préférés placés ensemble : " + " · ".join(
+            f"{duo} ({n} fois)" for duo, n in st.session_state.duos.items()
+        ))
+
     # ===========================
     # RÉPARTITION FINALE STYLÉE
     # ===========================
@@ -431,7 +521,7 @@ if st.session_state.get("repartition"):
 
     # Boutons téléchargement avec HTML personnalisé
     col_excel, col_pdf = st.columns(2)
-    
+
     with col_excel:
         if st.session_state.get("output_excel"):
             b64_excel = base64.b64encode(st.session_state.output_excel.getvalue()).decode()
@@ -442,7 +532,7 @@ if st.session_state.get("repartition"):
                 </button>
             </a>
             """, unsafe_allow_html=True)
-    
+
     with col_pdf:
         if st.session_state.get("output_pdf"):
             b64_pdf = base64.b64encode(st.session_state.output_pdf.getvalue()).decode()
